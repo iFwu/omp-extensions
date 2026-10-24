@@ -40,7 +40,7 @@ Old sessions without these records are not rewritten. Use the native tool-visibi
 
 After a whitespace boundary, `$`, `¥`, or `￥` opens the native skill candidates. Lowercase skill names filter them; arrows select, Tab or Enter accepts, and Escape closes while retaining the original text. Accepting writes the native `/skill:<name>` form without submitting it. Surrounding text and parameters remain intact. Native discovery and the `skills.enableSkillCommands` setting remain authoritative.
 
-Typing a digit after a currency symbol dismisses the list and keeps amounts such as `¥100` unchanged. Environment-variable forms, shell substitutions, escaped symbols, backtick code, and drafts beginning with `/`, `!`, `>`, or `%` do not trigger skill lookup. Unselected tokens are not rewritten on submission. Native slash, file, and inline completion retain their behavior.
+Typing a digit after a currency symbol dismisses the list and keeps amounts such as `¥100` unchanged. Environment-variable forms, shell substitutions, escaped symbols, backtick code, and drafts beginning with `/`, `!`, or `%` do not trigger skill lookup. Markdown blockquotes are normal prose: a leading `>` does not suppress skill lookup in the quoted draft or subsequent paragraphs. Selecting a skill after a quote preserves the quote and surrounding newlines. Unselected tokens are not rewritten on submission. Native slash, file, and inline completion retain their behavior.
 
 ## Session model switching
 

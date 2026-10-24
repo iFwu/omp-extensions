@@ -248,6 +248,26 @@ export default function(pi) {
                         if prose:
                             self.assertIn(prose.strip(), json.dumps(requests[-1], ensure_ascii=False))
 
+                for sigil in ("$", "¥", "￥"):
+                    send("> xxx")
+                    send("\n")
+                    send("\n")
+                    send(sigil)
+                    state = capture(lambda state: state["active"] and "fixture-alpha" in "\n".join(state["rows"]))
+                    self.assertEqual(state["text"], "> xxx\n\n" + sigil)
+                    send("fixture-b")
+                    state = capture(filtered_beta)
+                    self.assertNotIn("fixture-alpha", "\n".join(state["rows"]))
+                    send("\t")
+                    self.assertEqual(capture()["text"], "> xxx\n\n/skill:fixture-beta ")
+                    before = len(requests)
+                    send("quoted argument\r")
+                    wait_for(f"SKILL_REPLY_{before + 1}")
+                    body = json.dumps(requests[-1], ensure_ascii=False)
+                    self.assertIn("> xxx", body)
+                    self.assertIn("SKILL_BODY_fixture-beta", body)
+                    self.assertIn("quoted argument", body)
+
                 fault.write_text("inject once")
                 send("$")
                 state = capture(lambda state: not fault.exists() and not state["active"])

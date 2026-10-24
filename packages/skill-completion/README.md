@@ -19,6 +19,8 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 
 Native skill discovery and `skills.enableSkillCommands` remain authoritative. Currency amounts such as `￥100`, environment-variable forms, shell substitutions, escaped tokens, and command drafts are not rewritten.
 
+Markdown quotes do not put the draft in command mode. `$`, `¥`, and `￥` can open and filter skills after a quote followed by a blank line; selection preserves the quoted context, line breaks, and arguments.
+
 See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests

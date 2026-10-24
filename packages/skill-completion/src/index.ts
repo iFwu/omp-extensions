@@ -3,7 +3,7 @@ import type { AutocompleteProvider } from "@oh-my-pi/pi-tui";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 
 function skillToken(lines: string[], line: number, col: number): string | undefined {
-  if (/^[!/>%]/.test(lines.join("\n").trimStart())) return;
+  if (/^[!/%]/.test(lines.join("\n").trimStart())) return;
   const before = lines[line].slice(0, col);
   const token = /(?:^|\s)([$¥￥](?:[a-z][a-z0-9-]*(?:\/[a-z0-9-]*)?)?)$/.exec(before)?.[1];
   if (!token || (token.length > 1 && Object.hasOwn(process.env, token.slice(1)))) return;
