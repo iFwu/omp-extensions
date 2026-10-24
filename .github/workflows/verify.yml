@@ -1,0 +1,69 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install official OMP 18.12.6 and verify release checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -s)-$(uname -m)" in
+            Linux-x86_64) asset=omp-linux-x64 ;;
+            Linux-aarch64|Linux-arm64) asset=omp-linux-arm64 ;;
+            Darwin-arm64) asset=omp-darwin-arm64 ;;
+            Darwin-x86_64) asset=omp-darwin-x64 ;;
+            *) echo 'Unsupported runner architecture' >&2; exit 1 ;;
+          esac
+          install_dir="$RUNNER_TEMP/omp-standalone"
+          mkdir -p "$install_dir"
+          base=https://github.com/can1357/oh-my-pi/releases/download/v18.12.6
+          curl --fail --location --retry 3 "$base/$asset" -o "$install_dir/$asset"
+          curl --fail --location --retry 3 "$base/SHA256SUMS.txt" -o "$install_dir/SHA256SUMS.txt"
+          python3 - "$install_dir" "$asset" <<'PY'
+          import hashlib
+          from pathlib import Path
+          import sys
+          root, asset = Path(sys.argv[1]), sys.argv[2]
+          sums = [line.split() for line in (root / 'SHA256SUMS.txt').read_text().splitlines() if line.strip()]
+          matches = [digest for digest, name in sums if name.lstrip('*') == asset]
+          assert len(matches) == 1, f'Missing or ambiguous checksum: {asset}'
+          with (root / asset).open('rb') as binary:
+              actual = hashlib.file_digest(binary, 'sha256').hexdigest()
+          assert actual == matches[0], f'Checksum mismatch: {asset}'
+          PY
+          chmod 755 "$install_dir/$asset"
+          ln -s "$install_dir/$asset" "$install_dir/omp"
+          echo "$install_dir" >> "$GITHUB_PATH"
+          echo "OMP_BIN=$install_dir/omp" >> "$GITHUB_ENV"
+          "$install_dir/omp" --version
+      - name: Install development dependencies
+        run: |
+          bun install --frozen-lockfile
+          python3 -m pip install pyte==0.8.2 PyYAML==6.0.3
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Run all offline fixture tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Pack, install, doctor, and load smoke
+        run: bun run smoke:package
