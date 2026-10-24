@@ -72,6 +72,8 @@ export default function(pi) {
   ctx.ui.addAutocompleteProvider(current=>({
    getSuggestions:async(...args)=>{
     const result=await current.getSuggestions(...args);
+    // Keep filtering pending long enough to distinguish a settled result from the previous popup.
+    if(args[0][0]==="/skill:fixture-b") await new Promise(resolve=>setTimeout(resolve,900));
     if(existsSync(''' + json.dumps(str(fault)) + ''') && args[0][0].startsWith("/skill:")) {
      unlinkSync(''' + json.dumps(str(fault)) + ''');
      return {get items(){throw new Error("Injected dollar result failure");}};
@@ -142,14 +144,23 @@ export default function(pi) {
                 os.write(master, text.encode())
                 drain(0.3)
 
-            def capture():
-                snapshot.unlink(missing_ok=True)
-                send("\x1b\x13")
+            def capture(predicate=lambda state: True):
                 deadline = time.monotonic() + 5
-                while not snapshot.exists() and time.monotonic() < deadline:
-                    drain()
-                self.assertTrue(snapshot.exists(), output[-6000:].decode(errors="replace"))
-                return json.loads(snapshot.read_text())
+                state = None
+                while time.monotonic() < deadline:
+                    snapshot.unlink(missing_ok=True)
+                    send("\x1b\x13")
+                    while not snapshot.exists() and time.monotonic() < deadline:
+                        drain()
+                    self.assertTrue(snapshot.exists(), output[-6000:].decode(errors="replace"))
+                    state = json.loads(snapshot.read_text())
+                    if predicate(state):
+                        return state
+                self.fail(f"Editor state did not settle: {state}")
+
+            def filtered_beta(state):
+                rows = "\n".join(state["rows"])
+                return state["active"] and "fixture-beta" in rows and "fixture-alpha" not in rows
 
             def clear():
                 send("\x1b")
@@ -158,13 +169,13 @@ export default function(pi) {
             try:
                 wait_for("Skill Fixture")
                 send("$")
-                state = capture()
+                state = capture(lambda state: state["active"] and "fixture-alpha" in "\n".join(state["rows"]))
                 self.assertEqual(state["text"], "$")
                 self.assertTrue(state["active"], state)
                 self.assertIn("fixture-alpha", "\n".join(state["rows"]))
                 self.assertIn("fixture-beta", "\n".join(state["narrow"]))
                 send("fixture-b")
-                state = capture()
+                state = capture(filtered_beta)
                 self.assertIn("fixture-beta", "\n".join(state["rows"]))
                 self.assertNotIn("fixture-alpha", "\n".join(state["rows"]))
                 send("\t")
@@ -212,19 +223,19 @@ export default function(pi) {
                     with self.subTest(sigil=sigil):
                         send(prose)
                         send(sigil)
-                        state = capture()
+                        state = capture(lambda state: state["active"] and "fixture-alpha" in "\n".join(state["rows"]))
                         self.assertEqual(state["text"], prose + sigil)
                         self.assertTrue(state["active"], state)
                         self.assertIn("fixture-alpha", "\n".join(state["rows"]))
                         send("100")
-                        state = capture()
+                        state = capture(lambda state: not state["active"])
                         self.assertEqual(state["text"], prose + sigil + "100")
                         self.assertFalse(state["active"], state)
                         clear()
                         send(prose)
                         send(sigil)
                         send("fixture-b")
-                        state = capture()
+                        state = capture(filtered_beta)
                         self.assertIn("fixture-beta", "\n".join(state["rows"]))
                         self.assertNotIn("fixture-alpha", "\n".join(state["rows"]))
                         send("\r")
@@ -239,8 +250,8 @@ export default function(pi) {
 
                 fault.write_text("inject once")
                 send("$")
+                state = capture(lambda state: not fault.exists() and not state["active"])
                 self.assertFalse(fault.exists(), "Fault injection did not reach the completion path")
-                state = capture()
                 self.assertEqual(state["text"], "$")
                 self.assertFalse(state["active"])
                 clear()

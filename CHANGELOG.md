@@ -7,6 +7,8 @@
 - Separate composer registration, input rendering, queue decoration, and activity timing without changing historical configuration or session identifiers.
 - Run workspace tests through Bun and retain cross-feature failure isolation under integration tests, including combined operation after an Ask styling failure.
 - Verify the root tarball and all five standalone tarballs with isolated native installation and RPC smoke, without live-model inference.
+- Await observable skill-completion menu state under controlled asynchronous filtering instead of assuming a fixed input delay means filtering has finished.
+- Fail the verification matrix fast when a platform fails, while requiring both platforms to pass before release.
 
 ## 0.1.0
 
