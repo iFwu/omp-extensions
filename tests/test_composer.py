@@ -1,5 +1,6 @@
 """Exercise the context rule through the installed OMP TUI, offline."""
 
+import codecs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -13,6 +14,7 @@ import tempfile
 import threading
 import time
 import unittest
+import pyte
 
 from support import OMP_BIN, SRC, isolated_env, write_yaml
 
@@ -87,7 +89,9 @@ class ComposerTests(unittest.TestCase):
                 env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
             )
             os.close(slave)
-            ansi = re.compile(r"\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]")
+            screen = pyte.Screen(110, 30)
+            terminal = pyte.Stream(screen)
+            decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
             def wait_for_rule(minimum, maximum):
                 output = ""
@@ -100,9 +104,10 @@ class ComposerTests(unittest.TestCase):
                             break
                         if not chunk:
                             break
-                        output += chunk.decode(errors="replace")
-                        plain = ansi.sub("", output)
-                        for row in plain.splitlines():
+                        text = decoder.decode(chunk)
+                        output += text
+                        terminal.feed(text)
+                        for row in screen.display:
                             if "100K" not in row or "┃" not in row:
                                 continue
                             percent = re.search(r"(\d+(?:\.\d+)?)%", row)
