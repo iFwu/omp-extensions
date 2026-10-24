@@ -16,7 +16,7 @@ import time
 import unittest
 import pyte
 
-from support import OMP_BIN, SRC, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -84,7 +84,7 @@ class ComposerTests(unittest.TestCase):
             env.pop("PI_CONFIG_FILES", None)
             process = subprocess.Popen(
                 [OMP_BIN, "--cwd", directory, "--model", "ui-test/ui-model",
-                 "--no-tools", "--no-extensions", "-e", str(SRC / "claude-context.ts"),
+                 "--no-tools", "--no-extensions", "-e", str(extension_path("composer")),
                  "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--no-session", "--thinking", "off"],
                 env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
             )

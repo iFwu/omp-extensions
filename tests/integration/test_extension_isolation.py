@@ -13,7 +13,7 @@ import threading
 import time
 import unittest
 
-from support import OMP_BIN, SRC, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -115,7 +115,7 @@ class ExtensionIsolationTests(unittest.TestCase):
                 "display": {"hideToolActivity": True}, "hideThinkingBlock": True,
                 "providers": {"cacheWarming": "off"}, "retry": {"enabled": False, "modelFallback": False},
                 "compaction": {"enabled": False}, "completion": {"notify": "off"},
-                "composer": {"shape": "dotfiles/claude-context"} if "claude-context.ts" in extensions else {},
+                "composer": {"shape": "dotfiles/claude-context"} if "composer" in extensions else {},
             })
             write_yaml(root / "shared.yml", {"display": {"hideToolActivity": True}})
             write_yaml(root / "keybindings.yml", {"app.tools.toggleVisibility": "Ctrl+O"})
@@ -219,7 +219,7 @@ export default function(pi) {
             command = [OMP_BIN, "--cwd", directory, "--model", "isolation/fixture", "--tools", "read",
                        "--no-extensions", "-e", str(injector), "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--thinking", "low"]
             for extension in extensions:
-                command.extend(["-e", str(SRC / extension)])
+                command.extend(["-e", str(extension_path(extension))])
             if stream_chunks:
                 command.extend(["-e", str(observer)])
             process = subprocess.Popen(command, env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
@@ -274,8 +274,29 @@ export default function(pi) {
                 server.shutdown()
                 server.server_close()
 
+    def test_bundle_preserves_input_and_grouping_after_ask_styling_failure(self):
+        with self.session("composer", "transcript-grouping", "ask-history", "skill-completion", "model-switch") as (
+                root, process, requests, gate, blocked, send, see, until, settled, output):
+            send("/inject-failure ask-factory")
+            see("ANSWER: Keep")
+            see("Ask history styling disabled after an error")
+            send("BUNDLE_INPUT_UNCHANGED ￥100")
+            settled(2)
+            self.assertIn("BUNDLE_INPUT_UNCHANGED ￥100", json.dumps(requests[0], ensure_ascii=False))
+            self.assertNotIn("QUESTION: Storage mode", json.dumps(requests))
+            send("/capture-transcript")
+            until(lambda: (root / "snapshot.json").exists(), "bundle transcript after Ask failure")
+            rows = json.loads((root / "snapshot.json").read_text())
+            body = "\n".join(row for message in rows for row in message)
+            self.assertIn("3 tools", body)
+            self.assertIn("LIVE_BODY", body)
+            send("Continue with the other extensions still active.")
+            settled(3)
+            self.assertNotIn("Grouping disabled", output.decode(errors="replace"))
+            self.assertNotIn("Composer styling disabled", output.decode(errors="replace"))
+
     def test_grouping_live_thinking_and_fault_do_not_interrupt_followups(self):
-        with self.session("transcript-grouping.ts") as (root, process, requests, gate, blocked, send, see, until, settled, output):
+        with self.session("transcript-grouping") as (root, process, requests, gate, blocked, send, see, until, settled, output):
             send("Exercise hidden thinking and grouping.")
             settled(2)
             send("/capture-transcript")
@@ -299,7 +320,7 @@ export default function(pi) {
             self.assertNotIn("dotfiles.grouping", json.dumps(requests))
 
     def test_composer_and_queue_faults_preserve_input_and_queued_delivery(self):
-        with self.session("claude-context.ts") as (root, process, requests, gate, blocked, send, see, until, settled, output):
+        with self.session("composer") as (root, process, requests, gate, blocked, send, see, until, settled, output):
             send("/inject-failure input")
             see("Fault armed: input")
             send("INPUT_SURVIVES_FAILURE", submit=False)
@@ -325,7 +346,7 @@ export default function(pi) {
             self.assertIsNone(process.poll())
 
     def test_visibility_microtask_fault_preserves_native_toggle_and_followup(self):
-        with self.session("claude-context.ts") as (root, process, requests, gate, blocked, send, see, until, settled, output):
+        with self.session("composer") as (root, process, requests, gate, blocked, send, see, until, settled, output):
             send("/inject-failure visibility")
             see("Fault armed: visibility")
             send("\x0f", submit=False)
@@ -340,7 +361,7 @@ export default function(pi) {
 
     def test_ask_factory_and_lazy_render_faults_preserve_answers_and_followup(self):
         for mode in ("factory", "render"):
-            with self.subTest(mode=mode), self.session("ask-history.ts") as (root, process, requests, gate, blocked, send, see, until, settled, output):
+            with self.subTest(mode=mode), self.session("ask-history") as (root, process, requests, gate, blocked, send, see, until, settled, output):
                 send(f"/inject-failure ask-{mode}")
                 see("ANSWER: Keep")
                 see("Ask history styling disabled after an error")
@@ -356,7 +377,7 @@ export default function(pi) {
         self.check_streamed_marker(final=True)
 
     def check_streamed_marker(self, final):
-        with self.session("transcript-grouping.ts", stream_chunks=True, final_delay=121 if final else 0) as (root, process, requests, gate, blocked, send, see, until, settled, output):
+        with self.session("transcript-grouping", stream_chunks=True, final_delay=121 if final else 0) as (root, process, requests, gate, blocked, send, see, until, settled, output):
             send("Stream commentary after tool work.")
             settled(2)
             if final:
@@ -378,7 +399,7 @@ export default function(pi) {
             settled(4 if final else 3)
 
     def test_final_crossing_two_minutes_during_stream_gets_completed_marker(self):
-        with self.session("transcript-grouping.ts", final_stream_seconds=121) as (root, process, requests, gate, blocked, send, see, until, settled, output):
+        with self.session("transcript-grouping", final_stream_seconds=121) as (root, process, requests, gate, blocked, send, see, until, settled, output):
             started = time.monotonic()
             send("Stream a final answer across the two-minute threshold.")
             see("FINAL_STREAM_START")

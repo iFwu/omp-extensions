@@ -14,7 +14,7 @@ import threading
 import time
 import unittest
 
-from support import OMP_BIN, SRC, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -108,7 +108,7 @@ export default function(pi) {
                            COLORFGBG='0;15' if appearance == 'light' else '15;0')
                 env['PI_CONFIG_FILES'] = str(overlay)
                 process = subprocess.Popen([OMP_BIN, '--cwd', directory, '--model', 'ui-test/ui-model',
-                    '--no-tools', '--no-extensions', '-e', str(SRC / 'claude-context.ts'), '--no-skills',
+                    '--no-tools', '--no-extensions', '-e', str(extension_path('composer')), '--no-skills',
                     '-e', str(preparation_gate),
                     '--no-rules', '--no-lsp', '--no-title', '--no-session', '--thinking', 'off'],
                     env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)

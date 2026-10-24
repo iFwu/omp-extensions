@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import type { GroupingMarker } from "./grouping-line";
+import type { GroupingMarker } from "./render";
 
 type Phase = "commentary" | "final_answer";
 type TextGroup = {

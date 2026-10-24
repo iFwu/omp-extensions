@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import unittest
 
-from support import SRC
+from test_support import extension_path
 
 
 @unittest.skipUnless(shutil.which("bun"), "Bun is not installed")
@@ -26,7 +26,7 @@ const render = (marker, limit) => renderGroupingLabel(marker, limit, colors);
 """ + assertions
         result = subprocess.run(
             [shutil.which("bun"), "--no-install", "--eval", script,
-             str(SRC / "grouping-line.ts")],
+             str(extension_path("transcript-grouping", "render.ts"))],
             capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

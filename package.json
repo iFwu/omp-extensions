@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-extensions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Composer, transcript grouping, ask history, skill completion, and session model switching for Oh My Pi 18.12.6",
   "type": "module",
   "license": "MIT",
@@ -9,21 +9,22 @@
   "homepage": "https://github.com/iFwu/omp-extensions#readme",
   "bugs": { "url": "https://github.com/iFwu/omp-extensions/issues" },
   "keywords": ["omp", "oh-my-pi", "extension", "tui"],
-  "files": ["src", "README.md", "CHANGELOG.md", "LICENSE"],
+  "files": ["packages/*/src/**", "packages/*/package.json", "packages/*/README.md", "packages/*/LICENSE", "README.md", "CHANGELOG.md", "LICENSE"],
   "engines": { "bun": ">=1.3.14" },
   "packageManager": "bun@1.4.4",
+  "workspaces": ["packages/*"],
   "scripts": {
-    "test": "python3 -m unittest discover -s tests -v",
+    "test": "bun run --workspaces --parallel --no-exit-on-error test && python3 -m unittest discover -s tests/integration -v",
     "typecheck": "tsc --noEmit",
     "smoke:package": "python3 scripts/smoke-package.py"
   },
   "omp": {
     "extensions": [
-      "src/claude-context.ts",
-      "src/transcript-grouping.ts",
-      "src/ask-history.ts",
-      "src/skill-completion.ts",
-      "src/model-switch.ts"
+      "packages/composer/src/index.ts",
+      "packages/transcript-grouping/src/index.ts",
+      "packages/ask-history/src/index.ts",
+      "packages/skill-completion/src/index.ts",
+      "packages/model-switch/src/index.ts"
     ]
   },
   "peerDependencies": {

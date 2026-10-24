@@ -12,7 +12,7 @@ import threading
 import time
 import unittest
 
-from support import OMP_BIN, SRC, isolated_env, read_yaml, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, read_yaml, write_yaml
 
 
 @unittest.skipUnless(OMP_BIN, "OMP is not installed")
@@ -34,7 +34,7 @@ class ModelSwitchTests(unittest.TestCase):
             root = Path(directory)
             agent = root / "agent"
             agent.mkdir()
-            extension = SRC / "model-switch.ts"
+            extension = extension_path("model-switch")
             write_yaml(agent / "models.yml", {"providers": {
                 "switch-test": {
                     "baseUrl": f"http://127.0.0.1:{server.server_port}/v1",

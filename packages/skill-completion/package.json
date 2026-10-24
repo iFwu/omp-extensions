@@ -1,0 +1,45 @@
+{
+  "name": "@ifwu/omp-skill-completion",
+  "version": "0.2.0",
+  "description": "Native OMP skill completion with dollar and Chinese currency triggers",
+  "type": "module",
+  "license": "MIT",
+  "author": "iFwu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iFwu/omp-extensions.git",
+    "directory": "packages/skill-completion"
+  },
+  "homepage": "https://github.com/iFwu/omp-extensions/tree/main/packages/skill-completion",
+  "bugs": {
+    "url": "https://github.com/iFwu/omp-extensions/issues"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.3.14"
+  },
+  "scripts": {
+    "test": "PYTHONPATH=../.. python3 -m unittest discover -s tests -v"
+  },
+  "omp": {
+    "extensions": [
+      "src/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.12.6",
+    "@oh-my-pi/pi-tui": "18.12.6"
+  },
+  "peerDependenciesMeta": {
+    "@oh-my-pi/pi-coding-agent": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-tui": {
+      "optional": true
+    }
+  }
+}

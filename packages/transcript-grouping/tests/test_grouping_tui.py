@@ -13,7 +13,7 @@ import threading
 import time
 import unittest
 
-from support import OMP_BIN, SRC, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -152,7 +152,7 @@ export default function(pi) {
                 self.addCleanup(os.close, master)
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 80, 0, 0))
                 command = [OMP_BIN, "--cwd", directory, "--model", "grouping-test/fixture", "--tools", "read,grouping_wait",
-                           "--no-extensions", "-e", str(SRC / "transcript-grouping.ts"), "-e", str(observer),
+                           "--no-extensions", "-e", str(extension_path("transcript-grouping")), "-e", str(observer),
                            "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--thinking", "off",
                            "--session-dir", str(root / "sessions")]
                 if resume:

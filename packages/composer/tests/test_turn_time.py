@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import unittest
 
-from support import SRC
+from test_support import extension_path
 from pathlib import Path
 
 
@@ -177,7 +177,7 @@ assert.equal(working, undefined);
 console.log("PASS: single live duration, fixed completion time and timer cleanup");
 """
         result = subprocess.run(
-            [shutil.which("bun"), "--no-install", "--eval", script, str(SRC / "claude-context.ts")],
+            [shutil.which("bun"), "--no-install", "--eval", script, str(extension_path("composer"))],
             env=os.environ | {"TZ": "UTC"}, capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Organize composer, transcript grouping, Ask history, skill completion, and model switching as independent Bun workspace packages with package-local tests and documentation.
+- Keep the root package as the complete suite, with explicit feature entry points and directly included sources; use one version, lockfile, and release tag.
+- Separate composer registration, input rendering, queue decoration, and activity timing without changing historical configuration or session identifiers.
+- Run workspace tests through Bun and retain cross-feature failure isolation under integration tests, including combined operation after an Ask styling failure.
+- Verify the root tarball and all five standalone tarballs with isolated native installation and RPC smoke, without live-model inference.
+
 ## 0.1.0
 
 - Extract the existing composer, transcript grouping, ask-history rendering, skill completion, and session-only model switching into a standalone MIT-licensed OMP plugin package.

@@ -2,7 +2,7 @@
 import shutil
 import subprocess
 import unittest
-from pathlib import Path
+from test_support import extension_path
 
 
 @unittest.skipUnless(shutil.which("bun"), "Bun is not installed")
@@ -10,7 +10,7 @@ class GroupingStateTests(unittest.TestCase):
     def test_boundaries_finality_and_repeated_events(self):
         script = r'''
 import assert from "node:assert/strict";
-import { GroupingState } from "./src/grouping-state.ts";
+const { GroupingState } = await import(process.argv[1]);
 let now = 0;
 const state = new GroupingState(() => now);
 let serial = 0;
@@ -100,14 +100,15 @@ for (const [elapsed, tools, kind] of [
 }
 console.log("PASS: time/tool thresholds, deduplication, finality, reset and native text slices");
 '''
-        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script],
-                                cwd=Path(__file__).resolve().parent.parent, capture_output=True, text=True, timeout=15)
+        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script,
+                                 str(extension_path("transcript-grouping", "state.ts"))],
+                                capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_blocking_time_unions_calls_and_excludes_background_lifetime(self):
         script = r'''
 import assert from "node:assert/strict";
-import { GroupingState } from "./src/grouping-state.ts";
+const { GroupingState } = await import(process.argv[1]);
 let now = 0, serial = 0;
 const state = new GroupingState(() => now);
 const text = () => {
@@ -144,14 +145,15 @@ now = 520000;
 assert.deepEqual(text(), {kind:"phase",seconds:130,tools:0,failures:0});
 console.log("PASS: overlapping calls, background handoff, explicit wait, clipping, duplicate ends and reset");
 '''
-        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script],
-                                cwd=Path(__file__).resolve().parent.parent, capture_output=True, text=True, timeout=15)
+        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script,
+                                 str(extension_path("transcript-grouping", "state.ts"))],
+                                capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_final_duration_tracks_whole_turn_including_streamed_output(self):
         script = r'''
 import assert from "node:assert/strict";
-import { GroupingState } from "./src/grouping-state.ts";
+const { GroupingState } = await import(process.argv[1]);
 for (const phase of ["final_answer", "late", undefined]) {
   let now = 0;
   const state = new GroupingState(() => now);
@@ -199,14 +201,15 @@ now = 45000;
 state.finish(only);
 assert.equal(state.find(only, 0).marker.seconds, 45);
 '''
-        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script],
-                                cwd=Path(__file__).resolve().parent.parent, capture_output=True, text=True, timeout=15)
+        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script,
+                                 str(extension_path("transcript-grouping", "state.ts"))],
+                                capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_final_marker_survives_response_id_added_after_streaming(self):
         script = r'''
 import assert from "node:assert/strict";
-import { GroupingState } from "./src/grouping-state.ts";
+const { GroupingState } = await import(process.argv[1]);
 let now = 0;
 const state = new GroupingState(() => now);
 state.begin();
@@ -222,14 +225,15 @@ state.finish(persisted);
 assert.equal(state.find(persisted,0)?.marker?.seconds,125);
 assert.equal(state.awaitingFinal(persisted),false);
 '''
-        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script],
-                                cwd=Path(__file__).resolve().parent.parent, capture_output=True, text=True, timeout=15)
+        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script,
+                                 str(extension_path("transcript-grouping", "state.ts"))],
+                                capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_group_markers_survive_lagging_display_prefixes_and_native_slices(self):
         script = r'''
 import assert from "node:assert/strict";
-import { GroupingState } from "./src/grouping-state.ts";
+const { GroupingState } = await import(process.argv[1]);
 for (const signed of [false, true]) for (const kind of ["gap", "phase", "final"]) {
   let now = 0;
   const state = new GroupingState(() => now);
@@ -257,8 +261,9 @@ for (const signed of [false, true]) for (const kind of ["gap", "phase", "final"]
   assert.equal(state.find({...message, content:[{...second,text:"unrelated text"}]},0),undefined);
 }
 '''
-        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script],
-                                cwd=Path(__file__).resolve().parent.parent, capture_output=True, text=True, timeout=15)
+        result = subprocess.run([shutil.which("bun"), "--no-install", "--eval", script,
+                                 str(extension_path("transcript-grouping", "state.ts"))],
+                                capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 

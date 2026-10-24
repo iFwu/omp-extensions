@@ -1,4 +1,5 @@
 """Pack the public payload, install it with OMP, and complete an isolated RPC turn."""
+import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -12,14 +13,14 @@ import tempfile
 import threading
 import time
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
-from support import isolated_env, write_yaml
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_support import isolated_env, write_yaml
 
 REPO = Path(__file__).resolve().parents[1]
 TEXT = "PACKAGE_SMOKE_OK"
 
 
-def main():
+def smoke_package(package_directory, install_source=None):
     binary = shutil.which(os.environ.get("OMP_BIN", "omp"))
     if not binary:
         raise RuntimeError("Set OMP_BIN to the official OMP 18.12.6 standalone binary")
@@ -32,20 +33,27 @@ def main():
         env = isolated_env(root)
         env.update(PI_CODING_AGENT_DIR=str(agent), PI_CONFIG_DIR=str(agent), PI_NO_TITLE="1")
         packed = subprocess.run(["npm", "pack", "--json", "--ignore-scripts", "--pack-destination", str(root)],
-                                cwd=REPO, env=env, check=True, capture_output=True, text=True)
+                                cwd=package_directory, env=env, check=True, capture_output=True, text=True)
         archive = root / json.loads(packed.stdout)[0]["filename"]
         with tarfile.open(archive) as package:
             for member in package.getmembers():
-                assert not {".git", ".venv", "node_modules", "tests"}.intersection(Path(member.name).parts), member.name
+                assert not {".git", ".venv", "node_modules", "tests", "test_support", "scripts"}.intersection(Path(member.name).parts), member.name
             package.extractall(root, filter="data")
         manifest = json.loads((root / "package/package.json").read_text())
-        for args in (["plugin", "install", str(root / "package")], ["plugin", "doctor"], ["plugin", "list", "--json"]):
+        payload = root / "package"
+        for entry in manifest["omp"]["extensions"]:
+            target = (payload / entry).resolve()
+            assert target.is_relative_to(payload.resolve()) and target.is_file(), entry
+        source = install_source or str(root / "package")
+        for args in (["plugin", "install", source], ["plugin", "doctor"], ["plugin", "list", "--json"]):
             result = subprocess.run([binary, *args], cwd=root, env=env, check=True,
                                     capture_output=True, text=True, timeout=120)
             print(result.stdout)
             if args[1] == "list":
                 plugins = json.loads(result.stdout)["npm"]
-                assert any(plugin["name"] == manifest["name"] and plugin["enabled"] for plugin in plugins), plugins
+                enabled = [plugin for plugin in plugins if plugin["enabled"]]
+                assert len(enabled) == 1 and enabled[0]["name"] == manifest["name"], enabled
+                assert enabled[0]["version"] == manifest["version"], enabled
 
         class Handler(BaseHTTPRequestHandler):
             calls = 0
@@ -76,9 +84,11 @@ def main():
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         config = {"startup": {"setupWizard": False, "checkUpdate": False, "quiet": True},
-                  "composer": {"shape": "dotfiles/claude-context"}, "providers": {"cacheWarming": "off"},
+                  "providers": {"cacheWarming": "off"},
                   "retry": {"enabled": False, "modelFallback": False}, "compaction": {"enabled": False},
                   "memory": {"backend": "off"}, "completion": {"notify": "off"}}
+        if manifest["name"] in {"@ifwu/omp-extensions", "@ifwu/omp-composer"}:
+            config["composer"] = {"shape": "dotfiles/claude-context"}
         models = {"providers": {"package-fixture": {"baseUrl": f"http://127.0.0.1:{server.server_port}/v1",
                   "api": "openai-responses", "auth": "apiKey", "apiKey": "fixture-only",
                   "models": [{"id": "fixture", "name": "Package Fixture", "input": ["text"],
@@ -139,7 +149,17 @@ def main():
                     process.wait()
                 server.shutdown()
                 server.server_close()
-        print("Packed payload, plugin install/doctor, and isolated RPC fixture reply completed.")
+        print(f'{manifest["name"]}@{manifest["version"]}: packed payload, plugin install/doctor, and isolated RPC reply completed.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--git-source", help="Smoke only the suite using an exact Git ref matching this checkout")
+    args = parser.parse_args()
+    smoke_package(REPO, args.git_source)
+    if not args.git_source:
+        for manifest in sorted(REPO.glob("packages/*/package.json")):
+            smoke_package(manifest.parent)
 
 
 if __name__ == "__main__":

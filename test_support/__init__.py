@@ -5,8 +5,11 @@ import shutil
 
 import yaml
 
-SRC = Path(__file__).resolve().parent.parent / "src"
 OMP_BIN = shutil.which(os.environ.get("OMP_BIN", "omp"))
+
+
+def extension_path(package, module="index.ts"):
+    return Path(__file__).resolve().parents[1] / "packages" / package / "src" / module
 
 
 def write_yaml(path, data):

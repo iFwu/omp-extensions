@@ -22,6 +22,66 @@
         "@oh-my-pi/pi-tui",
       ],
     },
+    "packages/ask-history": {
+      "name": "@ifwu/omp-ask-history",
+      "version": "0.2.0",
+      "peerDependencies": {
+        "@oh-my-pi/pi-coding-agent": "18.12.6",
+        "@oh-my-pi/pi-tui": "18.12.6",
+      },
+      "optionalPeers": [
+        "@oh-my-pi/pi-coding-agent",
+        "@oh-my-pi/pi-tui",
+      ],
+    },
+    "packages/composer": {
+      "name": "@ifwu/omp-composer",
+      "version": "0.2.0",
+      "peerDependencies": {
+        "@oh-my-pi/pi-coding-agent": "18.12.6",
+        "@oh-my-pi/pi-tui": "18.12.6",
+      },
+      "optionalPeers": [
+        "@oh-my-pi/pi-coding-agent",
+        "@oh-my-pi/pi-tui",
+      ],
+    },
+    "packages/model-switch": {
+      "name": "@ifwu/omp-model-switch",
+      "version": "0.2.0",
+      "peerDependencies": {
+        "@oh-my-pi/pi-coding-agent": "18.12.6",
+      },
+      "optionalPeers": [
+        "@oh-my-pi/pi-coding-agent",
+      ],
+    },
+    "packages/skill-completion": {
+      "name": "@ifwu/omp-skill-completion",
+      "version": "0.2.0",
+      "peerDependencies": {
+        "@oh-my-pi/pi-coding-agent": "18.12.6",
+        "@oh-my-pi/pi-tui": "18.12.6",
+      },
+      "optionalPeers": [
+        "@oh-my-pi/pi-coding-agent",
+        "@oh-my-pi/pi-tui",
+      ],
+    },
+    "packages/transcript-grouping": {
+      "name": "@ifwu/omp-transcript-grouping",
+      "version": "0.2.0",
+      "peerDependencies": {
+        "@oh-my-pi/pi-ai": "18.12.6",
+        "@oh-my-pi/pi-coding-agent": "18.12.6",
+        "@oh-my-pi/pi-tui": "18.12.6",
+      },
+      "optionalPeers": [
+        "@oh-my-pi/pi-ai",
+        "@oh-my-pi/pi-coding-agent",
+        "@oh-my-pi/pi-tui",
+      ],
+    },
   },
   "packages": {
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.11", "", {}, "sha512-snZbO7MEDOof+hvNa97EjEY7qD7h2kwvQr5AJC3ZhQudKW5dnej6k3kP9NQV88hJwaS8vDqRLFo9rivLEhle2g=="],
@@ -39,6 +99,16 @@
     "@huggingface/tokenizers": ["@huggingface/tokenizers@0.2.0", "", {}, "sha512-LidMHe1FpcSYH4vcSjXooda34pC0M8m1gmDOv7SQi6Iv+ib1zX7J3sHBCC9/3FPCkn2k1b55FneVqMRxrr99pg=="],
 
     "@huggingface/transformers": ["@huggingface/transformers@4.3.1", "", { "dependencies": { "@huggingface/jinja": "^0.5.10", "@huggingface/tokenizers": "^0.2.0", "onnxruntime-node": "1.30.0", "onnxruntime-web": "1.31.0-dev.20260914-8d85527a0", "sharp": "^0.35.4" } }, "sha512-5+voSeUCFK6PCKlY15dPhNOKq3/zOTxDN7oC+Wy9dFb1QZ0TSQomZRRy7URRK8YRuUoE9fGMQTTPC5d/pWBJhA=="],
+
+    "@ifwu/omp-ask-history": ["@ifwu/omp-ask-history@workspace:packages/ask-history"],
+
+    "@ifwu/omp-composer": ["@ifwu/omp-composer@workspace:packages/composer"],
+
+    "@ifwu/omp-model-switch": ["@ifwu/omp-model-switch@workspace:packages/model-switch"],
+
+    "@ifwu/omp-skill-completion": ["@ifwu/omp-skill-completion@workspace:packages/skill-completion"],
+
+    "@ifwu/omp-transcript-grouping": ["@ifwu/omp-transcript-grouping@workspace:packages/transcript-grouping"],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 

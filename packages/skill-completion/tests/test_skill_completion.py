@@ -12,7 +12,7 @@ import threading
 import time
 import unittest
 
-from support import OMP_BIN, SRC, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -114,7 +114,7 @@ export default function(pi) {
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 80, 0, 0))
             process = subprocess.Popen([
                 OMP_BIN, "--cwd", directory, "--model", "skills-test/fixture", "--tools", "read",
-                "--no-extensions", "-e", str(observer), "-e", str(SRC / "skill-completion.ts"),
+                "--no-extensions", "-e", str(observer), "-e", str(extension_path("skill-completion")),
                 "--no-rules", "--no-lsp", "--no-title", "--thinking", "off", "--session-dir", str(root / "sessions"),
             ], env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
             os.close(slave)

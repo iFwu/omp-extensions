@@ -4,8 +4,8 @@ import { Markdown, type Component, type TUI } from "@oh-my-pi/pi-tui";
 import { AssistantMessageComponent } from "@oh-my-pi/pi-tui/chat/assistant-message";
 import { FigureMarkdown } from "@oh-my-pi/pi-tui/chat/figure-markdown";
 import { TranscriptContainer } from "@oh-my-pi/pi-tui/chrome/transcript-container";
-import { renderGroupingLabel, type GroupingMarker } from "./grouping-line";
-import { GroupingState } from "./grouping-state";
+import { renderGroupingLabel, type GroupingMarker } from "./render";
+import { GroupingState } from "./state";
 
 export default function (pi: ExtensionAPI) {
   let state = new GroupingState();

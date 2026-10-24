@@ -13,7 +13,7 @@ import threading
 import time
 import unittest
 
-from support import OMP_BIN, SRC, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
 
 
 @unittest.skipUnless(OMP_BIN, "OMP is not installed")
@@ -92,7 +92,7 @@ class AskHistoryTests(unittest.TestCase):
                 with tempfile.TemporaryFile(mode="w+") as errors:
                     command = [OMP_BIN, "--profile", "default", "--cwd", directory,
                                "--model", "ask-test/ask-model", "--mode", "rpc-ui", "--tools", "read,ask",
-                               "--no-extensions", "-e", str(SRC / "ask-history.ts"),
+                               "--no-extensions", "-e", str(extension_path("ask-history")),
                                "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--thinking", "off"]
                     if resume:
                         command.extend(["--resume", resume])
