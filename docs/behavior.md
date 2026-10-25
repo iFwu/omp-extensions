@@ -10,7 +10,7 @@ The native model, Git, cost, context, and stop controls remain authoritative. Co
 
 Queued messages use `STEERING` and `FOLLOW-UP` headings, retain native order and numbering, and appear exactly once whether tools are visible or hidden. Native queue delivery, cancellation, and take-back editing remain unchanged. Long messages keep native truncation and newline indicators. Queue rendering does not depend on selecting the shaded composer.
 
-Working text keeps the native tool-intent message. After one minute it can append elapsed time; a new intent yields precedence for at least 30 seconds. At turn end, a display-only `Worked for …` line shows total duration and local completion time. It clears at the next turn; switching sessions cancels the timer. The package writes none of this text to conversation history or model context.
+Working text keeps the native tool-intent message. After one minute it can append elapsed time; a new intent yields precedence for at least 30 seconds. Automatic continuations and background-result waits marked `willContinue` keep the same timing origin, including the wait, without showing a completion. At terminal turn end, a display-only `Worked for …` line shows total duration and local completion time. A new user task submitted while idle starts a fresh span; extension-originated continuation input does not. Switching sessions or shutting down cancels the timer. The package writes none of this text to conversation history or model context.
 
 ## Transcript grouping
 

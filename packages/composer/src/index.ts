@@ -24,10 +24,12 @@ export default async function (pi: ExtensionAPI) {
 
   const activity = createActivity();
   pi.on("agent_start", (_event, ctx) => { activity.start(ctx); });
+  pi.on("input", activity.input);
   pi.on("message_update", activity.messageUpdate);
   pi.on("tool_execution_start", activity.toolExecutionStart);
-  pi.on("agent_end", (_event, ctx) => { activity.end(ctx); });
+  pi.on("agent_end", activity.end);
   pi.on("session_switch", (_event, ctx) => { activity.sessionSwitch(ctx); });
+  pi.on("session_shutdown", (_event, ctx) => { activity.sessionSwitch(ctx); });
 
   registerComposer(pi, displayFailure);
 }

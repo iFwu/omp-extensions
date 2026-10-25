@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-extensions",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Composer, transcript grouping, ask history, skill completion, and session model switching for Oh My Pi 18.12.6",
   "type": "module",
   "license": "MIT",

@@ -1,4 +1,4 @@
-import type { ExtensionContext, MessageUpdateEvent, ToolExecutionStartEvent } from "@oh-my-pi/pi-coding-agent";
+import type { AgentEndEvent, ExtensionContext, InputEvent, MessageUpdateEvent, ToolExecutionStartEvent } from "@oh-my-pi/pi-coding-agent";
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
@@ -10,6 +10,7 @@ function formatDuration(seconds: number): string {
 
 export function createActivity() {
   let startedAt: number | undefined;
+  let continuing = false;
   let workingResumeAt = 0;
   let workingIntent: string | undefined;
   let cancelWorking: (() => void) | undefined;
@@ -31,7 +32,8 @@ export function createActivity() {
   return {
     start(ctx: ExtensionContext) {
       cancelWorking?.();
-      startedAt = performance.now();
+      if (!continuing) startedAt = performance.now();
+      continuing = false;
       workingResumeAt = 0;
       workingIntent = undefined;
       ctx.ui.setWidget("turn-time", undefined);
@@ -46,6 +48,11 @@ export function createActivity() {
       const timer = ctx.setInterval(update, 1000);
       cancelWorking = () => ctx.clearTimer(timer);
     },
+    input(event: InputEvent, ctx: ExtensionContext) {
+      if (event.source !== "extension" && ctx.isIdle() && !event.text.trimStart().startsWith("/")) {
+        continuing = false;
+      }
+    },
     messageUpdate({ message, assistantMessageEvent }: MessageUpdateEvent, ctx: ExtensionContext) {
       if (message.role !== "assistant" || !assistantMessageEvent.type.startsWith("toolcall_")) return;
       for (let index = message.content.length - 1; index >= 0; index--) {
@@ -58,7 +65,9 @@ export function createActivity() {
     toolExecutionStart({ intent }: ToolExecutionStartEvent, ctx: ExtensionContext) {
       noteWorkingIntent(intent, ctx);
     },
-    end(ctx: ExtensionContext) {
+    end(event: AgentEndEvent, ctx: ExtensionContext) {
+      continuing = event.willContinue === true;
+      if (continuing) return;
       cancelWorking?.();
       cancelWorking = undefined;
       ctx.ui.setWorkingMessage(undefined);
@@ -74,6 +83,7 @@ export function createActivity() {
       cancelWorking = undefined;
       ctx.ui.setWorkingMessage(undefined);
       startedAt = undefined;
+      continuing = false;
       ctx.ui.setWidget("turn-time", undefined);
     },
   };

@@ -33,6 +33,7 @@ const timers = new Map();
 let widget;
 let working;
 const ctx = {
+  isIdle: () => true,
   ui: {
     theme: { fg: (_color, text) => text },
     setWidget: (_key, lines) => { widget = lines; },
@@ -172,6 +173,47 @@ assert.equal(working, undefined);
 assert.equal(timers.size, 0);
 advance(120000);
 emit("agent_end");
+assert.equal(widget, undefined);
+assert.equal(working, undefined);
+emit("agent_start");
+advance(70000);
+emit("agent_end", { willContinue: true, awaitingAsyncWork: true });
+assert.equal(widget, undefined, "a background wait must not publish a completion");
+advance(30000);
+assert.deepEqual(duration(), ["1m", "40s"]);
+emit("agent_start");
+advance(20000);
+assert.deepEqual(duration(), ["2m", "0s"], "automatic continuation keeps the task's origin");
+emit("agent_end", { willContinue: true });
+advance(10000);
+emit("agent_start");
+advance(10000);
+emit("agent_end");
+assert.deepEqual(duration(), ["2m", "20s"]);
+assert.equal(timers.size, 0);
+emit("agent_start");
+advance(5000);
+emit("agent_end", { messages: [{ role: "assistant", stopReason: "aborted" }] });
+assert.deepEqual(duration(), ["5s"]);
+emit("agent_start");
+advance(60000);
+assert.deepEqual(duration(), ["1m", "0s"], "a new task must not inherit cancelled work");
+emit("session_switch");
+assert.equal(timers.size, 0);
+emit("agent_start");
+advance(70000);
+emit("agent_end", { willContinue: true });
+emit("input", { source: "extension", text: "continue" });
+emit("agent_start");
+advance(10000);
+assert.deepEqual(duration(), ["1m", "20s"]);
+emit("agent_end", { willContinue: true, awaitingAsyncWork: true });
+emit("input", { source: "interactive", text: "A new task" });
+emit("agent_start");
+advance(60000);
+assert.deepEqual(duration(), ["1m", "0s"]);
+emit("session_shutdown");
+assert.equal(timers.size, 0);
 assert.equal(widget, undefined);
 assert.equal(working, undefined);
 console.log("PASS: single live duration, fixed completion time and timer cleanup");

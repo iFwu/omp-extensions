@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Preserve cumulative Working duration across automatic continuations and background-result waits instead of showing a premature Worked completion and restarting the timer. Reset for a new idle user task and release activity timers on shutdown.
+
 ## 0.2.0
 
 - Organize composer, transcript grouping, Ask history, skill completion, and model switching as independent Bun workspace packages with package-local tests and documentation.
