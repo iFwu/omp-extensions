@@ -34,6 +34,11 @@ PERSISTENT = {
 }
 
 
+def popup_shows(session, label):
+    state = json.loads(session.snapshot.read_text())
+    return state.get("active") and label in "\n".join(state.get("rows", []))
+
+
 class NativeSession:
     def __init__(self, testcase, persistent=None, delayed_input=False):
         self.testcase = testcase
@@ -373,15 +378,17 @@ class NextStepTUITests(unittest.TestCase):
         session.ready()
         count = len(session.requests())
         session.send("@fixture-fi")
+        session.wait(lambda: popup_shows(session, "fixture-file.txt"), "settled native file popup")
         session.send("\t")
         session.wait(lambda: "fixture-file.txt" in (session.editor() or ""), "native file Tab completion")
         session.clear()
         session.send("/next-ste")
+        session.wait(lambda: popup_shows(session, "next-step"), "settled native slash popup")
         session.send("\t")
         session.wait(lambda: (session.editor() or "").startswith("/next-step"), "native slash Tab completion")
         session.clear()
         session.send("$fixture-a")
-        session.wait(lambda: json.loads(session.snapshot.read_text()).get("active") and "skill:fixture-alpha" in "\n".join(json.loads(session.snapshot.read_text()).get("rows", [])), "settled skill popup")
+        session.wait(lambda: popup_shows(session, "skill:fixture-alpha"), "settled skill popup")
         session.send("\t")
         session.wait(lambda: json.loads(session.snapshot.read_text()).get("expanded") == "/skill:fixture-alpha ", "expanded native skill draft")
         self.assertEqual(len(session.requests()), count, "Tab completion must not submit or accept next-step")
