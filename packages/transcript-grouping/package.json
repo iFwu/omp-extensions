@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-transcript-grouping",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Display-only transcript grouping and tool-wait timing for OMP",
   "type": "module",
   "license": "MIT",

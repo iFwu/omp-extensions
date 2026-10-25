@@ -35,7 +35,7 @@ PERSISTENT = {
 
 
 def popup_shows(session, label):
-    state = json.loads(session.snapshot.read_text())
+    state = session.state()
     return state.get("active") and label in "\n".join(state.get("rows", []))
 
 
@@ -47,21 +47,45 @@ class NativeSession:
         self.server = preview.FixtureServer(delay=0.05).start()
         self.snapshot = self.root / "editor.json"
         observer = self.root / "observer.ts"
-        # Compose with the native editor to observe expanded text behind collapsed skill tokens.
+        # Observe the composed native editor and actual widget renders, not terminal scrollback.
         observer.write_text('''
 import { writeFileSync, renameSync } from "node:fs";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 export default function(pi) {
  let timer;
  let editor;
+ let host;
+ let observedUI;
+ const widgets={};
  if (''' + json.dumps(delayed_input) + ''') pi.on("input",async()=>{await new Promise(resolve=>setTimeout(resolve,80));});
  pi.on("session_start",(_event,ctx)=>{
+  if(observedUI!==ctx.ui){
+   observedUI=ctx.ui;
+   const setWidget=ctx.ui.setWidget.bind(ctx.ui);
+   ctx.ui.setWidget=(key,content,options)=>{
+    delete widgets[key];
+    if(Array.isArray(content)) widgets[key]=content.map(row=>Bun.stripANSI(row));
+    return setWidget(key,typeof content!=="function"?content:(tui,theme)=>{
+     const component=content(tui,theme);
+     const render=component.render;
+     component.render=width=>{
+      const rows=render.call(component,width);
+      widgets[key]=rows.map(row=>Bun.stripANSI(row));
+      return rows;
+     };
+     return component;
+    },options);
+   };
+  }
   const previous=ctx.ui.getEditorComponent();
-  ctx.ui.setEditorComponent((tui,theme,keys)=>editor=previous?previous(tui,theme,keys):new CustomEditor(tui,theme,keys));
+  ctx.ui.setEditorComponent((tui,theme,keys)=>{
+   host=tui;
+   return editor=previous?previous(tui,theme,keys):new CustomEditor(tui,theme,keys);
+  });
   clearInterval(timer);
   timer=setInterval(()=>{
    const path=''' + json.dumps(str(self.snapshot)) + ''';
-   writeFileSync(path+".tmp",JSON.stringify({text:ctx.ui.getEditorText(),expanded:editor?.getExpandedText(),active:editor?.isAutocompleteActive(),rows:editor?.render(100).map(row=>Bun.stripANSI(row))}));
+   writeFileSync(path+".tmp",JSON.stringify({text:ctx.ui.getEditorText(),expanded:editor?.getExpandedText(),active:editor?.isAutocompleteActive(),rows:editor?.render(100).map(row=>Bun.stripANSI(row)),widgets,overlay:host?.hasOverlay(),editorFocused:host?.getFocused()===editor,sessionFile:ctx.sessionManager.getSessionFile(),sessionId:ctx.sessionManager.getSessionId()}));
    renameSync(path+".tmp",path);
   },30);
  });
@@ -81,14 +105,61 @@ export default function(pi) {
         skills.mkdir(parents=True)
         (skills / "SKILL.md").write_text("---\nname: fixture-alpha\ndescription: Fixture completion\n---\nOnly a local skill fixture.\n")
         (self.root / "fixture-file.txt").write_text("Local file fixture\n")
+        self.command = command
+        self.env = env
+        self.start(command)
+        testcase.addCleanup(self.close)
+        self.wait(lambda: self.snapshot.exists(), "editor startup", timeout=30)
+
+    def start(self, command):
         self.master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 45, 110, 0, 0))
-        self.process = subprocess.Popen(command, cwd=self.root, env=env, stdin=slave, stdout=slave,
+        self.process = subprocess.Popen(command, cwd=self.root, env=self.env, stdin=slave, stdout=slave,
                                         stderr=slave, start_new_session=True)
         os.close(slave)
         self.output = bytearray()
-        testcase.addCleanup(self.close)
-        self.wait(lambda: self.snapshot.exists(), "editor startup", timeout=30)
+
+    def restart(self, resume=False):
+        session_file = self.state()["sessionFile"] if resume else None
+        self.stop()
+        self.snapshot.unlink(missing_ok=True)
+        self.start(self.command + (["--session", session_file] if resume else []))
+        self.wait(lambda: self.snapshot.exists(), "restarted editor startup", timeout=30)
+
+    def state(self):
+        return json.loads(self.snapshot.read_text()) if self.snapshot.exists() else {}
+
+    def rows(self):
+        return "\n".join(self.state().get("rows", []))
+
+    def widget(self):
+        return self.state().get("widgets", {}).get("ifwu.next-step", [])
+
+    def expect_cards(self, scene, focused=0, checked=()):
+        result = preview.FIXTURES[scene]["suggestion"]
+
+        def matching_cards():
+            rows = self.widget()
+            rendered = "\n".join(rows)
+            if result["question"] not in rendered:
+                return False
+            for index, action in enumerate(result["actions"]):
+                title_row = next((row for row in rows if action["title"] in row), "")
+                if not title_row or action["tradeoff"] not in rendered or (("›" in title_row) != (index == focused)):
+                    return False
+                if result["selectionMode"] == "multiple":
+                    if ("[x]" if index in checked else "[ ]") not in title_row:
+                        return False
+            return True
+
+        self.wait(matching_cards, f"{scene} cards, focus={focused}, checked={checked}")
+
+    def expect_no_suggestion(self):
+        self.wait(lambda: not self.widget(), "no suggestion widget")
+        if self.editor() == "":
+            for fixture in preview.FIXTURES.values():
+                for action in fixture["suggestion"]["actions"]:
+                    self.testcase.assertNotIn(action["draft"], self.rows())
 
     def drain(self, seconds=0.08):
         deadline = time.monotonic() + seconds
@@ -116,7 +187,7 @@ export default function(pi) {
         self.drain(0.12)
 
     def editor(self):
-        return json.loads(self.snapshot.read_text())["text"] if self.snapshot.exists() else None
+        return self.state().get("text")
 
     def expect_draft(self, text):
         self.wait(lambda: self.editor() == text, f"draft {text!r}")
@@ -150,16 +221,19 @@ export default function(pi) {
         count = len(self.events("displayed"))
         self.scene(scene)
         self.event("displayed", after=count)
-        self.wait(lambda: "Esc 忽略".encode() in self.output, "production suggestion widget")
+        if preview.FIXTURES[scene]["suggestion"]["kind"] == "choice":
+            self.expect_cards(scene)
+        else:
+            self.wait(lambda: bool(self.widget()), "production suggestion widget")
 
     def clear(self):
-        if json.loads(self.snapshot.read_text()).get("active"):
+        if self.state().get("active"):
             self.send("\x1b")
-            self.wait(lambda: not json.loads(self.snapshot.read_text()).get("active"), "popup dismissal")
+            self.wait(lambda: not self.state().get("active"), "popup dismissal")
         self.send("\x15")
         self.expect_draft("")
 
-    def close(self):
+    def stop(self):
         if self.process.poll() is None:
             self.process.terminate()
             try:
@@ -168,6 +242,9 @@ export default function(pi) {
                 self.process.kill()
                 self.process.wait(timeout=5)
         os.close(self.master)
+
+    def close(self):
+        self.stop()
         self.server.shutdown()
         self.server.server_close()
         self.directory.cleanup()
@@ -175,26 +252,50 @@ export default function(pi) {
 
 @unittest.skipUnless(os.name == "posix" and OMP_BIN, "Native POSIX OMP 18.12.6 binary required")
 class NextStepTUITests(unittest.TestCase):
+    def assert_submission_payload(self, session, scene, text):
+        request = session.requests()[-1]
+        messages = request.get("input", request.get("messages", []))
+        users = [preview.text_content(message) for message in messages
+                 if isinstance(message, dict) and message.get("role") == "user"]
+        initial = session.requests()[0]
+        initial_users = [preview.text_content(message) for message in initial.get("input", initial.get("messages", []))
+                         if isinstance(message, dict) and message.get("role") == "user"]
+        self.assertEqual(users, [*initial_users, text], "Only the submitted draft may extend native user context")
+        serialized = json.dumps(request, ensure_ascii=False)
+        result = preview.FIXTURES[scene]["suggestion"]
+        for value in (result["reason"], result["question"]):
+            if value:
+                self.assertNotIn(value, serialized, "Suggestion metadata must not enter the main model context")
+        for action in result["actions"]:
+            if action["draft"] not in text:
+                self.assertNotIn(action["draft"], serialized, "Unsubmitted drafts must not enter the main model context")
+
     def test_first_completion_none_single_choice(self):
-        for scene, kind in (("done", "none"), ("ready", "single"), ("decision", "choice")):
-            with self.subTest(kind=kind):
+        for scene, kind in (("done", "none"), ("ready", "single"), ("decision", "choice"), ("maintenance", "choice")):
+            with self.subTest(scene=scene):
                 session = NativeSession(self)
                 session.scene(scene)
                 generated = session.event("generated")
                 self.assertEqual(generated["result"]["kind"], kind)
                 for key in ("schema", "id", "at", "context", "model", "effort", "promptVersion", "latencyMs"):
                     self.assertIn(key, generated)
-                self.assertEqual(generated["schema"], 1)
+                self.assertEqual(generated["schema"], 2)
+                if kind == "choice":
+                    self.assertEqual(generated["result"]["selectionMode"], preview.FIXTURES[scene]["suggestion"]["selectionMode"])
+                else:
+                    self.assertNotIn("selectionMode", generated["result"])
                 self.assertEqual(len(session.requests()), 1)
                 self.assertEqual(len(session.requests(suggestion=True)), 1)
                 self.assertEqual(generated["effort"], "low")
                 if kind == "none":
                     session.drain(0.4)
                     self.assertEqual(session.events("displayed"), [])
-                    self.assertNotIn("Esc 忽略".encode(), session.output)
+                    session.expect_no_suggestion()
                 else:
                     session.event("displayed")
-                    session.wait(lambda: "Esc 忽略".encode() in session.output, "real production widget")
+                    session.wait(lambda: bool(session.widget()), "real production widget")
+                    if kind == "choice":
+                        session.expect_cards(scene)
                 session.expect_draft("")
                 # Stop each independent first-turn session before starting another.
                 self.doCleanups()
@@ -204,7 +305,7 @@ class NextStepTUITests(unittest.TestCase):
         draft = preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"]
         for key in ("\t", "\x1b[C"):
             session.ready()
-            session.wait(lambda: draft in "\n".join(json.loads(session.snapshot.read_text())["rows"]), "visible ghost inside native editor")
+            session.wait(lambda: draft in session.rows(), "visible ghost inside native editor")
             session.expect_draft("")
             count = len(session.requests())
             session.send(key)
@@ -220,50 +321,158 @@ class NextStepTUITests(unittest.TestCase):
         session.event("generated", after=3)
         self.assertEqual(len(session.requests()), count + 1, "Ghost Enter submits exactly once")
 
-    def test_typing_dismisses_ghost_without_reviving_and_choices_have_no_default(self):
+    def test_typing_dismisses_single_ghost_without_revival(self):
         session = NativeSession(self)
         draft = preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"]
         session.ready()
         session.send("验证")
         session.expect_draft("验证")
-        self.assertNotIn(draft, "\n".join(json.loads(session.snapshot.read_text())["rows"]))
+        self.assertNotIn(draft, session.rows())
+        session.expect_no_suggestion()
         session.clear()
         session.drain(0.2)
-        self.assertNotIn(draft, "\n".join(json.loads(session.snapshot.read_text())["rows"]))
-        session.ready("decision")
-        editor_rows = "\n".join(json.loads(session.snapshot.read_text())["rows"])
-        for action in preview.FIXTURES["decision"]["suggestion"]["actions"]:
-            self.assertNotIn(action["draft"], editor_rows)
-        count = len(session.requests())
-        session.send("\r")
-        session.drain(0.2)
-        self.assertEqual(len(session.requests()), count, "Enter must not pick a choice implicitly")
+        session.expect_no_suggestion()
+        session.send("\t")
+        session.expect_draft("")
+        session.send("/next-step pick\r")
+        session.expect_draft("")
+        session.drain(0.3)
+        self.assertTrue(session.state().get("editorFocused"))
+        self.assertFalse(session.state().get("overlay"))
+        session.expect_no_suggestion()
+        self.assertEqual(len(session.requests()), 1)
         self.assertEqual(session.events("accepted"), [])
 
-    def test_arrow_selected_choice_enter_sends_and_tab_fills(self):
-        session = NativeSession(self, delayed_input=True)
-        actions = preview.FIXTURES["decision"]["suggestion"]["actions"]
+    def test_default_first_choice_enter_sends_once_without_default_checks(self):
+        for scene in ("decision", "maintenance"):
+            with self.subTest(scene=scene):
+                session = NativeSession(self, delayed_input=True)
+                session.ready(scene)
+                draft = preview.FIXTURES[scene]["suggestion"]["actions"][0]["draft"]
+                session.expect_draft("")
+                session.send("\r")
+                accepted = session.event("accepted")
+                self.assertEqual(accepted["indices"], [0])
+                session.event("submitted", predicate=lambda event: event["outcome"] == "accepted" and event["text"] == draft)
+                session.wait(lambda: len(session.requests()) == 2, "default first choice native submit")
+                session.event("generated", after=1)
+                self.assertEqual(len(session.requests()), 2, "Enter submits exactly once")
+                self.assertEqual(len(session.requests(suggestion=True)), 2, "Acceptance needs no extra model call")
+                self.assert_submission_payload(session, scene, draft)
+                self.doCleanups()
+
+    def test_choice_arrows_wrap_both_directions_and_focus_does_not_check(self):
+        for scene in ("decision", "maintenance"):
+            with self.subTest(scene=scene):
+                session = NativeSession(self, delayed_input=True)
+                actions = preview.FIXTURES[scene]["suggestion"]["actions"]
+                session.ready(scene)
+                for key, focused in (("\x1b[A", 2), ("\x1b[B", 0), ("\x1b[B", 1),
+                                     ("\x1b[B", 2), ("\x1b[B", 0), ("\x1b[A", 2)):
+                    session.send(key)
+                    session.expect_cards(scene, focused=focused)
+                    session.expect_draft("")
+                self.assertEqual(session.events("accepted"), [], "Focus alone must not adopt or check")
+                self.assertEqual(len(session.requests()), 1)
+                session.send("\r")
+                session.event("submitted", predicate=lambda event: event["outcome"] == "accepted" and event["text"] == actions[2]["draft"])
+                session.wait(lambda: len(session.requests()) == 2, "focused choice native submit")
+                session.event("generated", after=1)
+                self.assert_submission_payload(session, scene, actions[2]["draft"])
+                for key in ("\t", "\x1b[C"):
+                    session.ready(scene)
+                    count = len(session.requests())
+                    suggestions = len(session.requests(suggestion=True))
+                    session.send("\x1b[B")
+                    session.expect_cards(scene, focused=1)
+                    session.send(key)
+                    session.expect_draft(actions[1]["draft"])
+                    self.assertEqual(len(session.requests()), count, "Tab/Right only fills the focused choice")
+                    self.assertEqual(len(session.requests(suggestion=True)), suggestions)
+                    session.clear()
+                self.doCleanups()
+
+    def test_multiple_space_toggle_and_combined_enter_tab_right_use_option_order(self):
+        actions = preview.FIXTURES["maintenance"]["suggestion"]["actions"]
+        combined = "\n\n".join(actions[index]["draft"] for index in (0, 2))
+        for key in ("\r", "\t", "\x1b[C"):
+            with self.subTest(key=key):
+                session = NativeSession(self, delayed_input=True)
+                session.ready("maintenance")
+                session.send(" ")
+                session.expect_cards("maintenance", checked=(0,))
+                session.expect_draft("")
+                session.send(" ")
+                session.expect_cards("maintenance")
+                # Check the last option before the first, leaving focus on unchecked option 2.
+                session.send("\x1b[A")
+                session.send(" ")
+                session.expect_cards("maintenance", focused=2, checked=(2,))
+                session.send("\x1b[B")
+                session.send(" ")
+                session.send("\x1b[B")
+                session.expect_cards("maintenance", focused=1, checked=(0, 2))
+                session.expect_draft("")
+                self.assertEqual(session.events("accepted"), [])
+                self.assertEqual(len(session.requests()), 1)
+                self.assertEqual(len(session.requests(suggestion=True)), 1)
+                session.send(key)
+                accepted = session.event("accepted")
+                self.assertEqual(accepted["indices"], [0, 2])
+                self.assertEqual(accepted["draft"], combined)
+                if key == "\r":
+                    session.event("submitted", predicate=lambda event: event["outcome"] == "accepted" and event["text"] == combined)
+                    session.wait(lambda: len(session.requests()) == 2, "combined drafts native submit")
+                    session.event("generated", after=1)
+                    self.assertEqual(len(session.requests()), 2)
+                    self.assertEqual(len(session.requests(suggestion=True)), 2)
+                    self.assert_submission_payload(session, "maintenance", combined)
+                else:
+                    session.expect_draft(combined)
+                    session.expect_no_suggestion()
+                    self.assertEqual(len(session.requests()), 1, "Combined Tab/Right never submits")
+                    self.assertEqual(len(session.requests(suggestion=True)), 1, "Combining drafts is local")
+                self.doCleanups()
+
+    def test_single_select_space_is_native_text_not_a_toggle(self):
+        session = NativeSession(self)
         session.ready("decision")
-        count = len(session.requests())
-        for key in ("\x1b[B", "\x1b[A", "\x1b[A"):
-            session.send(key)
-        session.wait(lambda: actions[1]["draft"] in "\n".join(json.loads(session.snapshot.read_text())["rows"]),
-                     "selected choice previewed in native editor")
-        session.expect_draft("")
-        self.assertEqual(session.events("accepted"), [], "arrow selection alone must not adopt")
-        self.assertEqual(len(session.requests()), count, "arrow selection must not send")
-        session.send("\r")
-        session.event("submitted", predicate=lambda event: event["outcome"] == "accepted" and event["text"] == actions[1]["draft"])
-        session.wait(lambda: len(session.requests()) == count + 1, "Enter sends selected choice once")
-        self.assertIn(actions[1]["draft"], json.dumps(session.requests()[-1], ensure_ascii=False))
-        session.event("generated", after=1)
-        session.ready("decision")
-        count = len(session.requests())
+        session.send(" ")
+        session.expect_draft(" ")
+        session.expect_cards("decision", focused=None)
+        self.assertEqual(session.events("accepted"), [])
+        self.assertNotIn("[x]", "\n".join(session.widget()))
+        self.assertNotIn("[ ]", "\n".join(session.widget()))
+        self.assertEqual(len(session.requests()), 1)
+
+    def test_choice_cards_stay_read_only_and_typed_enter_sends_only_typed_text(self):
+        session = NativeSession(self)
+        session.ready("maintenance")
+        session.send(" ")
         session.send("\x1b[A")
-        session.send("\x1b[B")
-        session.send("\t")
-        session.expect_draft(actions[0]["draft"])
-        self.assertEqual(len(session.requests()), count, "Tab only fills the selected choice")
+        session.send(" ")
+        session.expect_cards("maintenance", focused=2, checked=(0, 2))
+        text = "仅解释当前状态"
+        session.send(text)
+        session.expect_draft(text)
+        session.expect_cards("maintenance", focused=None, checked=(0, 2))
+        for action in preview.FIXTURES["maintenance"]["suggestion"]["actions"]:
+            self.assertNotIn(action["draft"], session.rows())
+        session.send(" ")
+        session.send("\x1b[C")
+        session.send("\x1b1")
+        session.expect_draft(text + " ")
+        session.expect_cards("maintenance", focused=None, checked=(0, 2))
+        session.send("不要执行任务。")
+        typed = text + " 不要执行任务。"
+        session.expect_draft(typed)
+        self.assertEqual(session.events("accepted"), [])
+        session.send("\r")
+        session.event("submitted", predicate=lambda event: event["outcome"] == "other" and event["text"] == typed)
+        session.wait(lambda: len(session.requests()) == 2, "typed-only native submit")
+        session.event("generated", after=1)
+        self.assertEqual(len(session.requests()), 2)
+        self.assert_submission_payload(session, "maintenance", typed)
 
     def test_alt_accept_does_not_send_and_submitted_outcomes(self):
         session = NativeSession(self)
@@ -272,7 +481,7 @@ class NextStepTUITests(unittest.TestCase):
         draft = preview.FIXTURES["decision"]["suggestion"]["actions"][1]["draft"]
         session.expect_draft(draft)
         accepted = session.event("accepted")
-        self.assertEqual(accepted["index"], 1)
+        self.assertEqual(accepted["indices"], [1])
         self.assertEqual(accepted["draft"], draft)
         self.assertEqual(len(session.requests()), 1, "Alt acceptance must not send to main model")
         session.send("\r")
@@ -301,6 +510,116 @@ class NextStepTUITests(unittest.TestCase):
         self.assertEqual(len(session.requests()), 1)
         session.send("\r")
         session.event("submitted", predicate=lambda event: event["outcome"] == "other" and event["text"] == "这是我自己的草稿")
+
+    def test_esc_cancels_permanently_and_preserves_existing_draft(self):
+        for draft in ("", "保留这段未发送草稿"):
+            with self.subTest(draft=draft):
+                session = NativeSession(self)
+                session.ready("maintenance")
+                session.send(" ")
+                session.expect_cards("maintenance", checked=(0,))
+                if draft:
+                    session.send(draft)
+                    session.expect_draft(draft)
+                    session.expect_cards("maintenance", focused=None, checked=(0,))
+                session.send("\x1b")
+                session.expect_draft(draft)
+                session.expect_no_suggestion()
+                session.clear()
+                session.drain(0.2)
+                session.expect_no_suggestion()
+                session.send("\x1b1")
+                session.expect_draft("")
+                session.send("/next-step pick\r")
+                session.expect_draft("")
+                session.drain(0.3)
+                self.assertTrue(session.state().get("editorFocused"), "Cancelled result must not reopen a picker")
+                self.assertFalse(session.state().get("overlay"))
+                session.expect_no_suggestion()
+                session.send("\r")
+                session.drain(0.2)
+                self.assertEqual(session.events("accepted"), [])
+                self.assertEqual(len(session.events("displayed")), 1)
+                self.assertEqual(len(session.requests()), 1)
+                self.assertEqual(len(session.requests(suggestion=True)), 1)
+                session.ready("decision")
+                self.doCleanups()
+
+    def test_native_completion_escape_dismisses_popup_before_cards(self):
+        for text, label in (("@fixture-fi", "fixture-file.txt"), ("/next-ste", "next-step"),
+                            ("$fixture-a", "skill:fixture-alpha")):
+            with self.subTest(completion=text):
+                session = NativeSession(self)
+                session.ready("maintenance")
+                session.send(" ")
+                session.send(text)
+                session.wait(lambda: popup_shows(session, label), "native completion popup")
+                session.expect_cards("maintenance", focused=None, checked=(0,))
+                dismissed = len(session.events("dismissed"))
+                session.send("\x1b")
+                session.wait(lambda: not session.state().get("active"), "first Escape dismisses completion")
+                session.expect_draft(text)
+                session.expect_cards("maintenance", focused=None, checked=(0,))
+                self.assertEqual(len(session.events("dismissed")), dismissed)
+                session.send("\x1b")
+                session.expect_draft(text)
+                session.expect_no_suggestion()
+                session.clear()
+                session.expect_no_suggestion()
+                self.assertEqual(session.events("accepted"), [])
+                self.assertEqual(len(session.requests()), 1)
+                self.doCleanups()
+
+    def test_native_selector_escape_dismisses_overlay_before_cards(self):
+        for command in ("/preview\r", "\x1b/"):
+            with self.subTest(command=command):
+                session = NativeSession(self)
+                session.ready("maintenance")
+                session.send(" ")
+                session.send(command)
+                session.wait(lambda: session.state().get("overlay") or not session.state().get("editorFocused"),
+                             "native selector")
+                dismissed = len(session.events("dismissed"))
+                session.send("\x1b")
+                session.wait(lambda: not session.state().get("overlay") and session.state().get("editorFocused"),
+                             "first Escape dismisses selector")
+                session.expect_draft("")
+                session.expect_cards("maintenance", checked=(0,))
+                self.assertEqual(len(session.events("dismissed")), dismissed)
+                session.send("\x1b")
+                session.expect_no_suggestion()
+                self.assertEqual(len(session.requests()), 1)
+                self.doCleanups()
+
+    def test_restart_and_resume_do_not_restore_old_cards(self):
+        for resume in (False, True):
+            with self.subTest(resume=resume):
+                session = NativeSession(self)
+                session.ready("maintenance")
+                session.send(" ")
+                session.expect_cards("maintenance", checked=(0,))
+                previous_id = session.state()["sessionId"]
+                session.restart(resume=resume)
+                session.wait(lambda: session.state().get("editorFocused"), "restarted native editor focus")
+                session.drain(0.4)
+                if resume:
+                    self.assertEqual(session.state()["sessionId"], previous_id, "Test resumes the original session")
+                else:
+                    self.assertNotEqual(session.state()["sessionId"], previous_id)
+                session.expect_draft("")
+                session.expect_no_suggestion()
+                session.send("/next-step pick\r")
+                session.expect_draft("")
+                session.drain(0.3)
+                self.assertTrue(session.state().get("editorFocused"))
+                self.assertFalse(session.state().get("overlay"))
+                session.expect_no_suggestion()
+                self.assertEqual(len(session.requests()), 1, "Resume does not replay a main turn")
+                self.assertEqual(len(session.requests(suggestion=True)), 1, "Resume does not regenerate old suggestions")
+                self.assertEqual(len(session.events("displayed")), 1)
+                self.assertEqual(session.events("accepted"), [])
+                session.ready("decision")
+                self.doCleanups()
 
     def test_delayed_result_stays_cancelled_after_typing_and_delete_to_empty(self):
         session = NativeSession(self)
@@ -366,7 +685,8 @@ class NextStepTUITests(unittest.TestCase):
         session.ready("decision")
         count = len(session.requests())
         session.send("/next-step pick\r")
-        session.drain(0.3)
+        session.wait(lambda: session.state().get("overlay") or not session.state().get("editorFocused"),
+                     "native next-step picker")
         session.send("\r")
         draft = preview.FIXTURES["decision"]["suggestion"]["actions"][0]["draft"]
         session.expect_draft(draft)
@@ -390,7 +710,7 @@ class NextStepTUITests(unittest.TestCase):
         session.send("$fixture-a")
         session.wait(lambda: popup_shows(session, "skill:fixture-alpha"), "settled skill popup")
         session.send("\t")
-        session.wait(lambda: json.loads(session.snapshot.read_text()).get("expanded") == "/skill:fixture-alpha ", "expanded native skill draft")
+        session.wait(lambda: session.state().get("expanded") == "/skill:fixture-alpha ", "expanded native skill draft")
         self.assertEqual(len(session.requests()), count, "Tab completion must not submit or accept next-step")
         self.assertEqual(session.events("accepted"), [])
 
@@ -417,7 +737,7 @@ class NextStepTUITests(unittest.TestCase):
             with self.subTest(persistent):
                 session = NativeSession(self, persistent=persistent)
                 session.scene("decision")
-                session.wait(lambda: "Esc 忽略".encode() in session.output, "persistently enabled widget")
+                session.expect_cards("decision")
                 session.send("\x1b1")
                 session.expect_draft(preview.FIXTURES["decision"]["suggestion"]["actions"][0]["draft"])
                 self.assertEqual(session.events(), [])

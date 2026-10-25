@@ -219,7 +219,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix="omp-next-step-preview-") as directory:
             command, env = offline_launch(binary, directory, server, scene=args.scene, effort=args.effort)
             print("Real Next-step · offline loopback models · no paid LLM calls / install / production build", flush=True)
-            print("/preview: scenes, delay and failure controls. Single: Enter sends, Tab/Right fills. Choice: Up/Down selects, Enter sends, Tab/Right fills; Alt+1/2/3 or /next-step pick only fills. Temporary sessions/feedback are deleted on exit.", flush=True)
+            print("/preview: scenes, delay and failure controls. Single: Enter sends, Tab/Right fills. Choices: first focused, none checked; Up/Down wraps; multiple only: Space toggles when the editor is empty and no popup is open. Enter sends checked drafts in option order (blank-line separated), or the focused draft; Tab/Right fills without sending. Typing hides the ghost but keeps choice cards read-only; typed Enter sends only your text. Esc cancels permanently and preserves your draft; native popups dismiss first. Alt+1/2/3 or /next-step pick only fills; cancelled/restarted results never revive. No extra model call to combine drafts. Temporary sessions/feedback are deleted on exit.", flush=True)
             return subprocess.call(command, cwd=directory, env=env)
     finally:
         server.shutdown()

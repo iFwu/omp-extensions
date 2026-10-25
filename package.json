@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-extensions",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Portable display, input, and optional next-step extensions for Oh My Pi 18.12.6",
   "type": "module",
   "license": "MIT",

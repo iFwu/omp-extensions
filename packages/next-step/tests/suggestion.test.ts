@@ -4,11 +4,11 @@ import type { AgentEndEvent } from "@oh-my-pi/pi-coding-agent";
 import { buildContext, parseSuggestion, type Suggestion } from "../src/suggestion";
 
 type Message = AgentEndEvent["messages"][number];
-const action = { title: "继续排查", draft: "我试过了，还是不行，继续排查。", tradeoff: "" };
+const action = { title: "继续排查", draft: "帮我继续排查连接失败的原因。", tradeoff: "" };
 const single: Suggestion = { kind: "single", reason: "有明确后续意图", question: "", actions: [action] };
 const choice: Suggestion = {
-  kind: "choice", reason: "两种真实替代方案", question: "你想选哪种？",
-  actions: [{ ...action, tradeoff: "保留现有配置" }, { title: "更换方案", draft: "改用第二种方案。", tradeoff: "需要迁移配置" }],
+  kind: "choice", selectionMode: "single", reason: "两种真实替代方案", question: "你想选哪种？",
+  actions: [{ ...action, tradeoff: "保留现有配置" }, { title: "更换方案", draft: "帮我换成集中管理配置的方案。", tradeoff: "需要迁移配置" }],
 };
 const parse = (value: unknown) => parseSuggestion(JSON.stringify(value));
 function user(content: UserMessage["content"], synthetic = false): UserMessage {
@@ -24,14 +24,43 @@ function assistant(content: string, overrides: Partial<AssistantMessage> = {}): 
 const toolResult: Message = { role: "toolResult", toolCallId: "call-1", toolName: "read", content: [{ type: "text", text: "SECRET TOOL LOG" }], isError: false, timestamp: 3 };
 
 describe("parseSuggestion", () => {
-  test("accepts none, single, and actual choices", () => {
+  test("accepts none and single without selectionMode", () => {
     const none: Suggestion = { kind: "none", reason: "没有明确后续", question: "", actions: [] };
-    for (const value of [none, single, choice]) expect(parse(value)).toEqual(value);
+    for (const value of [none, single]) {
+      const result = parse(value);
+      expect(result).toEqual(value);
+      expect(Object.hasOwn(result, "selectionMode")).toBe(false);
+    }
   });
 
-  test("allows Unicode and completed-operation drafts without semantic filtering", () => {
-    expect(parse(single).actions[0].draft).toBe("我试过了，还是不行，继续排查。");
-    expect(parse({ ...single, actions: [{ ...action, draft: "I have tried it; it still fails. Investigate further." }] }).kind).toBe("single");
+  test.each(["single", "multiple"] as const)("preserves %s choice mode and original action order", selectionMode => {
+    const value = { ...choice, selectionMode };
+    expect(parse(value)).toEqual(value);
+    const three = { ...value, actions: [...value.actions, { title: "检查依赖", draft: "帮我检查依赖版本。", tradeoff: "定位兼容问题" }] };
+    expect(parse(three)).toEqual(three);
+    for (const actions of [[], [value.actions[0]], [...three.actions, { title: "查看日志", draft: "帮我分析错误日志。", tradeoff: "补充错误线索" }]]) {
+      expect(() => parse({ ...value, actions })).toThrow();
+    }
+  });
+
+  test("requires an exact choice selectionMode without legacy defaults", () => {
+    for (const selectionMode of [undefined, null, false, 1, "", "Single", "single ", "multi", [], {}]) {
+      expect(() => parse({ ...choice, selectionMode })).toThrow();
+    }
+  });
+
+  test("rejects selectionMode on every non-choice kind", () => {
+    for (const value of [single, { kind: "none", reason: "没有明确后续", question: "", actions: [] }]) {
+      for (const selectionMode of ["single", "multiple", null, false, ""]) {
+        expect(() => parse({ ...value, selectionMode })).toThrow();
+      }
+    }
+  });
+
+  test("keeps semantic grounding in the prompt, not a completed-action phrase filter", () => {
+    for (const draft of ["我试过了，还是不行，继续排查。", "I have tried it; it still fails. Investigate further."]) {
+      expect(parse({ ...single, actions: [{ ...action, draft }] }).actions[0].draft).toBe(draft);
+    }
     expect(parse({ ...single, actions: [{ ...action, title: "🧪".repeat(48), draft: "中".repeat(1200) }] }).kind).toBe("single");
   });
 
@@ -47,6 +76,22 @@ describe("parseSuggestion", () => {
       { ...single, actions: [null] }, { ...single, actions: [{ ...action, title: 1 }] },
       { ...single, actions: [{ ...action, draft: [] }] }, { ...single, actions: [{ ...action, tradeoff: false }] },
       { ...single, actions: [{ ...action, extra: "unexpected" }] }]) expect(() => parse(value)).toThrow();
+  });
+
+  test("requires every base and action field in both choice modes", () => {
+    for (const selectionMode of ["single", "multiple"] as const) {
+      const value = { ...choice, selectionMode };
+      for (const field of Object.keys(value)) {
+        const missing = Object.fromEntries(Object.entries(value).filter(([key]) => key !== field));
+        expect(() => parse(missing)).toThrow();
+      }
+      expect(() => parse({ ...value, extra: true })).toThrow();
+      for (const field of Object.keys(action)) {
+        const missing = Object.fromEntries(Object.entries(value.actions[0]).filter(([key]) => key !== field));
+        expect(() => parse({ ...value, actions: [missing, value.actions[1]] })).toThrow();
+      }
+      expect(() => parse({ ...value, actions: [{ ...value.actions[0], selectionMode }, value.actions[1]] })).toThrow();
+    }
   });
 
   test("enforces cardinality and choice-only fields", () => {

@@ -1,24 +1,28 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Theme } from "@oh-my-pi/pi-tui";
 import type { Suggestion } from "./suggestion";
 
-// Each title follows " │ › 1  " (8 cells); tradeoffs share title rows only when every one fits there whole.
-const LEAD = 8;
 const GAP = 3;
 
-export function choiceRows(theme: Pick<Theme, "fg" | "bold">, result: Suggestion, selected: number | undefined, width: number): string[] {
+export function choiceRows(theme: Pick<Theme, "fg" | "bold">, result: Suggestion, selected: number, checked: ReadonlySet<number>, editing: boolean, width: number): string[] {
   const row = (text: string) => truncateToWidth(` ${text}`, width);
   const frame = (text: string) => theme.fg("borderMuted", text);
   const muted = (text: string) => theme.fg("muted", text);
-  const column = Math.min(Math.max(...result.actions.map(action => visibleWidth(action.title))), Math.max(8, Math.floor((width - LEAD - GAP) / 2)));
-  const inline = Math.max(...result.actions.map(action => visibleWidth(action.tradeoff))) <= width - LEAD - column - GAP;
+  const multiple = result.kind === "choice" && result.selectionMode === "multiple";
+  const lead = multiple ? 12 : 8;
+  const column = Math.min(Math.max(...result.actions.map(action => visibleWidth(action.title))), Math.max(8, Math.floor((width - lead - GAP) / 2)));
+  const inline = Math.max(...result.actions.map(action => visibleWidth(action.tradeoff))) <= width - lead - column - GAP;
   const rows = [row(`${frame("╭─")} ${muted(result.question)}`)];
   result.actions.forEach((action, index) => {
-    const active = index === selected;
-    const title = truncateToWidth(action.title, inline ? column : width - LEAD);
-    const head = `${frame("│")} ${active ? theme.fg("accent", "›") : " "} ${muted(String(index + 1))}  ${active ? theme.fg("accent", theme.bold(title)) : theme.bold(title)}`;
+    const active = !editing && index === selected;
+    const title = truncateToWidth(action.title, inline ? column : width - lead);
+    const mark = multiple ? `${checked.has(index) ? theme.fg("accent", "[x]") : muted("[ ]")} ` : "";
+    const head = `${frame("│")} ${active ? theme.fg("accent", "›") : " "} ${mark}${muted(String(index + 1))}  ${active ? theme.fg("accent", theme.bold(title)) : theme.bold(title)}`;
     if (inline) rows.push(row(`${head}${" ".repeat(column - visibleWidth(title) + GAP)}${muted(action.tradeoff)}`));
-    else rows.push(row(head), ...wrapTextWithAnsi(action.tradeoff, Math.max(1, width - LEAD)).map(line => row(`${frame("│")}      ${muted(line)}`)));
+    else rows.push(row(head), ...wrapTextWithAnsi(action.tradeoff, Math.max(1, width - lead)).map(line => row(`${frame("│")}${" ".repeat(lead - 2)}${muted(line)}`)));
   });
-  rows.push(row(`${frame("╰─")} ${muted(selected === undefined ? "↑↓ 选择 · Alt+/ 查看全文 · Esc 忽略" : "Enter 发送 · Tab 填入输入框 · Esc 忽略")}`));
+  const targets = multiple && checked.size ? [...checked].sort((a, b) => a - b).map(index => index + 1).join("、") : String(selected + 1);
+  const hint = editing ? "输入框内容原样发送 · Esc 忽略建议" :
+    `↑↓ 移动${multiple ? " · Space 勾选" : ""} · Enter 发送 ${targets} · Tab 填入 · Esc 忽略`;
+  rows.push(row(`${frame("╰─")} ${muted(hint)}`));
   return rows;
 }

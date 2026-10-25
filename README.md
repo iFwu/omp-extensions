@@ -11,7 +11,7 @@ This package targets **OMP 18.12.6**; development and CI use Bun **1.4.4**. OMP 
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.3.0
+omp plugin install github:iFwu/omp-extensions#v0.4.0
 omp plugin doctor
 ```
 
@@ -32,7 +32,7 @@ The root manifest explicitly registers each workspace's `src/index.ts`. Workspac
 | [ask-history](packages/ask-history/README.md) | Renders persisted Ask answers using native history styling, retaining plain-text answers if styling fails. |
 | [skill-completion](packages/skill-completion/README.md) | Adds `$`, `¥`, and `￥` skill completion through the native editor. |
 | [model-switch](packages/model-switch/README.md) | Rewrites `/model <selector>` and `/models <selector>` to session-only `/switch`; bare `/model` stays the native role hub. |
-| [next-step](packages/next-step/README.md) | Optional asynchronous recommendations/action cards, draft-only adoption, and private local feedback; disabled until configured. |
+| [next-step](packages/next-step/README.md) | Optional ghost drafts and single/multiple choice cards, explicit send/fill controls, and private local feedback; disabled until configured. |
 
 See [Behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for lifecycle, completion boundaries, native-input preservation, and failure isolation.
 
@@ -57,8 +57,8 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.3.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.3.0
-omp plugin install ./omp-extensions-v0.3.0/packages/skill-completion
+git clone --branch v0.4.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.4.0
+omp plugin install ./omp-extensions-v0.4.0/packages/skill-completion
 omp plugin doctor
 ```
 
@@ -99,7 +99,7 @@ python3 ~/omp-extensions/scripts/preview-next-action.py
 
 `bun run preview:next-action` is equivalent. Python 3 uses only its stdlib; OMP must be the native 18.12.6 standalone executable (`OMP_BIN` can select it). Offline mode uses separate loopback main/suggestion models in a temporary HOME, configuration, session and feedback directory. It makes no paid model calls and cleans temporary data on exit.
 
-`/preview` selects single/choice/none scenarios or controlled delays and failures. A single recommendation appears as native ghost text only in an empty composer: Tab/Right adopts it, Enter adopts and sends. Typing clears it and restores native completion. Choice cards keep `Alt+1/2/3` draft-only adoption and `Alt+/` or `/next-step pick` selection, without an implicit Enter choice. There is no parallel prototype UI implementation.
+`/preview` selects single/choice/multiple/none scenarios or controlled delays and failures. Single ghost drafts disappear on typing; choice cards remain visible while editing. Empty-editor cards focus the first action, Up/Down wraps, Space checks combinable tasks, Enter submits the checked/focused drafts, and Tab/Right only fills. Escape cancels without deleting editor text, after native popups close. `Alt+1/2/3` and the full-text picker remain draft-only. No parallel prototype UI or hidden main-agent suggestion context is used.
 
 For an explicitly live source session, use `--live --model @next-step --effort low` (configure that role first). It retains the configured main model and existing credentials, loads source suite entries instead of installed extensions, and makes real model calls. It installs nothing. Daily installed use, persistent settings, model/effort selection and private local feedback are documented in [next-step](packages/next-step/README.md).
 

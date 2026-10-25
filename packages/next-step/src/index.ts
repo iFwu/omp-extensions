@@ -41,7 +41,9 @@ export default function nextStep(pi: ExtensionAPI) {
   let outcome = "off";
   let current: Sample | undefined;
   let visible = false;
-  let selected: number | undefined;
+  let selected = 0;
+  const checked = new Set<number>();
+  let previewText: string | undefined;
   let picker: AbortController | undefined;
   let revision = 0;
   let run = 0;
@@ -66,7 +68,9 @@ export default function nextStep(pi: ExtensionAPI) {
 
   function hide(ctx: ExtensionContext) {
     visible = false;
-    selected = undefined;
+    selected = 0;
+    checked.clear();
+    previewText = undefined;
     ctx.ui.setWidget(WIDGET, undefined);
   }
 
@@ -105,22 +109,49 @@ export default function nextStep(pi: ExtensionAPI) {
     catch { console.error("[next-step] UI disabled after an error"); }
   }
 
-  function available(ctx: ExtensionContext): boolean {
+  function ownsInput(ctx: ExtensionContext): boolean {
     return enabled && !failed && ctx.mode === "tui" && ctx.agent.kind === "main" && ctx.isIdle() &&
-      !ctx.hasPendingMessages() && !ctx.getPendingPlanReview() && ctx.ui.getEditorText().length === 0 &&
+      !ctx.hasPendingMessages() && !ctx.getPendingPlanReview() &&
       !!editor && !editor.isAutocompleteActive() && tui?.getFocused() === editor && !tui.hasOverlay();
+  }
+
+  function available(ctx: ExtensionContext): boolean {
+    return ownsInput(ctx) && ctx.ui.getEditorText().length === 0;
+  }
+
+  function selectedIndices(result: Suggestion): number[] {
+    if (result.kind === "single") return [0];
+    return result.kind === "choice" && result.selectionMode === "multiple" && checked.size
+      ? result.actions.flatMap((_action, index) => checked.has(index) ? [index] : [])
+      : [selected];
+  }
+
+  function dismiss(ctx: ExtensionContext) {
+    invalidate(ctx, "dismissed");
+    if (current) current.result = undefined;
   }
 
   function render(ctx: ExtensionContext, sample: Sample) {
     const result = sample.result;
     if (!result || result.kind === "none") return;
+    previewText = selectedIndices(result).map(index => result.actions[index].draft).join(" ").replace(/\s+/g, " ");
     if (result.kind === "single") {
       ctx.ui.setWidget(WIDGET, [ctx.ui.theme.fg("muted", "下一步建议 · Enter 发送 · Tab 填入输入框 · Esc 忽略")], { placement: "aboveEditor" });
     } else {
       const chosen = selected;
+      const marked = new Set(checked);
       ctx.ui.setWidget(WIDGET, (_tui, theme) => {
-        let cached: { width: number; rows: string[] } | undefined;
-        return { render: width => (cached?.width === width ? cached : cached = { width, rows: choiceRows(theme, result, chosen, width) }).rows };
+        let cached: { width: number; editing: boolean; rows: string[] } | undefined;
+        return {
+          render: width => {
+            const editing = ctx.ui.getEditorText().length > 0;
+            if (!cached || cached.width !== width || cached.editing !== editing) {
+              cached = { width, editing, rows: choiceRows(theme, result, chosen, marked, editing, width) };
+            }
+            return cached.rows;
+          },
+          invalidate: () => { cached = undefined; },
+        };
       }, { placement: "aboveEditor" });
     }
     visible = true;
@@ -131,14 +162,15 @@ export default function nextStep(pi: ExtensionAPI) {
     outcome = "shown";
   }
 
-  function accept(ctx: ExtensionContext, index: number) {
+  function accept(ctx: ExtensionContext, indices: number[]) {
     const sample = current;
-    const action = sample?.result?.actions[index];
-    if (!sample || !action || sample.session !== ctx.sessionManager.getSessionId() || !available(ctx)) return;
+    const result = sample?.result;
+    if (!sample || !result || sample.session !== ctx.sessionManager.getSessionId() || !available(ctx)) return;
+    const draft = indices.map(index => result.actions[index].draft).join("\n\n");
     invalidate(ctx, "accepted into draft");
-    ctx.ui.setEditorText(action.draft);
-    sample.accepted = action.draft;
-    record(sample, { type: "accepted", index, draft: action.draft });
+    ctx.ui.setEditorText(draft);
+    sample.accepted = draft;
+    record(sample, { type: "accepted", indices, draft });
   }
 
   async function choose(ctx: ExtensionContext) {
@@ -153,8 +185,7 @@ export default function nextStep(pi: ExtensionAPI) {
       if (controller.signal.aborted || captured !== revision || current !== sample) return;
       picker = undefined;
       const index = options.findIndex(option => option.label === selected);
-      if (index >= 0) accept(ctx, index);
-      else invalidate(ctx, "dismissed");
+      if (index >= 0) accept(ctx, [index]);
     } catch { if (!controller.signal.aborted) fail(ctx); }
     finally { if (picker === controller) picker = undefined; }
   }
@@ -241,11 +272,7 @@ export default function nextStep(pi: ExtensionAPI) {
             // Native setup assigns prediction after the factory returns; compose with that owner.
             const previousPrediction = component.prediction;
             const prediction = () => {
-              if (enabled && visible && !failed && context && available(context)) {
-                const result = current?.result;
-                const index = result?.kind === "single" ? 0 : selected;
-                return index === undefined ? undefined : result?.actions[index]?.draft.replace(/\s+/g, " ");
-              }
+              if (enabled && visible && !failed && context && available(context)) return previewText;
               return previousPrediction?.();
             };
             component.prediction = prediction;
@@ -272,25 +299,38 @@ export default function nextStep(pi: ExtensionAPI) {
       if (failed || !enabled || picker) return undefined;
       if (data === "\x1b[I" || data === "\x1b[O" || /^\x1b\[<\d+;\d+;\d+[Mm]$/.test(data)) return undefined;
       try {
+        if ((visible || current?.pending || scheduled) && ownsInput(ctx) && matchesKey(data, "escape")) {
+          dismiss(ctx);
+          return { consume: true };
+        }
         if (visible && available(ctx)) {
           const result = current?.result;
           const up = matchesKey(data, "up");
           if (result?.kind === "choice" && (up || matchesKey(data, "down"))) {
             const count = result.actions.length;
-            selected = selected === undefined ? (up ? count - 1 : 0) : (selected + (up ? count - 1 : 1)) % count;
+            selected = (selected + (up ? count - 1 : 1)) % count;
             render(ctx, current!);
             return { consume: true };
           }
-          const target = result?.kind === "single" ? 0 : selected;
-          if (target !== undefined && (matchesKey(data, "tab") || matchesKey(data, "right") || matchesKey(data, "enter"))) {
-            accept(ctx, target);
+          if (result?.kind === "choice" && result.selectionMode === "multiple" && matchesKey(data, "space")) {
+            if (checked.has(selected)) checked.delete(selected);
+            else checked.add(selected);
+            render(ctx, current!);
+            return { consume: true };
+          }
+          if (result && (matchesKey(data, "tab") || matchesKey(data, "right") || matchesKey(data, "enter"))) {
+            accept(ctx, selectedIndices(result));
             return matchesKey(data, "enter") ? undefined : { consume: true };
           }
           if (data === "\x1b/" || matchesKey(data, "alt+/")) { void choose(ctx); return { consume: true }; }
           const index = (["alt+1", "alt+2", "alt+3"] as const).findIndex((key, number) => data === `\x1b${number + 1}` || matchesKey(data, key));
-          if (index >= 0 && current?.result?.actions[index]) { accept(ctx, index); return { consume: true }; }
+          if (index >= 0 && current?.result?.actions[index]) { accept(ctx, [index]); return { consume: true }; }
         }
-        invalidate(ctx, "user input");
+        previewText = undefined;
+        if (current?.pending || scheduled || (visible && current?.result?.kind === "single")) {
+          invalidate(ctx, "user input");
+          if (current) current.result = undefined;
+        }
       } catch { fail(ctx); }
       return undefined;
     });

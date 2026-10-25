@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Require `selectionMode` on choice suggestions. Focus the first action by default, use Space to check combinable tasks, and join checked drafts in option order for Enter submission or Tab/Right filling.
+- Keep full choice cards visible while editing without intercepting native input. Typed submissions include only the typed draft, with no hidden option/context injection. Escape cancels suggestions permanently while preserving text and respecting native popup priority; restart/resume does not restore old cards.
+- Refine next-step generation around latest-answer follow-ups, user-to-assistant requests, and explicit safety prerequisites; avoid redundant verification, invented user preferences/results, extra planning gates, and implementation-detail dumps. Record choice modes and accepted index arrays in local feedback schema 2.
+
 ## 0.3.0
 
 - Add opt-in next-step generation through native model/auth APIs: one asynchronous request per completed main TUI turn, no JEV prefilter, and mutually exclusive single ghost-text recommendations or action cards. In an empty composer, Tab/Right adopts a single ghost without sending; explicit Enter adopts and submits once. Choice cards start unselected: Up/Down select and preview one, wrapping at either end, Enter submits it once, and Tab/Right fill it without sending. User typing immediately restores native completion, and choices never have an implicit Enter default.
