@@ -1,6 +1,6 @@
 # OMP Extensions
 
-Five portable display and input extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed.
+Six portable display, input, and optional next-step extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed.
 
 ## Compatibility
 
@@ -11,13 +11,15 @@ This package targets **OMP 18.12.6**; development and CI use Bun **1.4.4**. OMP 
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.2.0
+omp plugin install github:iFwu/omp-extensions#v0.3.0
 omp plugin doctor
 ```
 
 All packages share one version and repository-wide release tag. Package names are metadata, not a claim that the suite or individual packages have been published to npm. Start a new OMP process after installing or changing extensions.
 
-The package does not provide or replace model catalogs, provider endpoints, credentials, shared configuration, prompts, or session-management services. It does not enable any external service. Do not register both this package and copies of its individual extensions in the same process.
+Since `v0.3.0` the suite includes next-step. Uninstall a standalone next-step package before installing the suite so the extension is not registered twice; this removes the standalone settings, so set them again under the suite name as described in [next-step](packages/next-step/README.md).
+
+The package does not provide or replace model catalogs, provider endpoints, credentials, shared configuration, or session-management services. Optional next-step inference is disabled until explicitly enabled; its generation prompt is part of that feature. Do not load the same extension both through the suite and standalone.
 
 ## Included modules
 
@@ -30,6 +32,7 @@ The root manifest explicitly registers each workspace's `src/index.ts`. Workspac
 | [ask-history](packages/ask-history/README.md) | Renders persisted Ask answers using native history styling, retaining plain-text answers if styling fails. |
 | [skill-completion](packages/skill-completion/README.md) | Adds `$`, `¥`, and `￥` skill completion through the native editor. |
 | [model-switch](packages/model-switch/README.md) | Rewrites `/model <selector>` and `/models <selector>` to session-only `/switch`; bare `/model` stays the native role hub. |
+| [next-step](packages/next-step/README.md) | Optional asynchronous recommendations/action cards, draft-only adoption, and private local feedback; disabled until configured. |
 
 See [Behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for lifecycle, completion boundaries, native-input preservation, and failure isolation.
 
@@ -44,7 +47,7 @@ The historical `dotfiles/claude-context` composer identifier and `dotfiles.ask-h
 
 ### Selecting extensions
 
-The suite enables all five entries. Toggle it as a unit with:
+The suite registers all six entries; next-step generation is separately opt-in. Toggle the suite as a unit with:
 
 ```sh
 omp plugin disable @ifwu/omp-extensions
@@ -54,8 +57,8 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.2.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.2.0
-omp plugin install ./omp-extensions-v0.2.0/packages/skill-completion
+git clone --branch v0.3.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.3.0
+omp plugin install ./omp-extensions-v0.3.0/packages/skill-completion
 omp plugin doctor
 ```
 
@@ -85,6 +88,21 @@ For Git transport verification, run `python3 scripts/smoke-package.py --git-sour
 GitHub Actions runs the same checks for pull requests and `main` pushes on Linux and macOS, downloads official release binaries, and checks them against that release's `SHA256SUMS.txt`. Release tags point to commits that already passed this matrix, rather than duplicating it on tag pushes. Required checks use no model credentials and make no live-model calls. They validate integration and deterministic behavior, **not real-model response quality**.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
+
+### Next-step source preview
+
+Run the actual next-step extension without installing or building a package:
+
+```sh
+python3 ~/omp-extensions/scripts/preview-next-action.py
+```
+
+`bun run preview:next-action` is equivalent. Python 3 uses only its stdlib; OMP must be the native 18.12.6 standalone executable (`OMP_BIN` can select it). Offline mode uses separate loopback main/suggestion models in a temporary HOME, configuration, session and feedback directory. It makes no paid model calls and cleans temporary data on exit.
+
+`/preview` selects single/choice/none scenarios or controlled delays and failures. A single recommendation appears as native ghost text only in an empty composer: Tab/Right adopts it, Enter adopts and sends. Typing clears it and restores native completion. Choice cards keep `Alt+1/2/3` draft-only adoption and `Alt+/` or `/next-step pick` selection, without an implicit Enter choice. There is no parallel prototype UI implementation.
+
+For an explicitly live source session, use `--live --model @next-step --effort low` (configure that role first). It retains the configured main model and existing credentials, loads source suite entries instead of installed extensions, and makes real model calls. It installs nothing. Daily installed use, persistent settings, model/effort selection and private local feedback are documented in [next-step](packages/next-step/README.md).
+
 
 ### Workspace boundaries and releases
 

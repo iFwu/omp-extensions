@@ -46,6 +46,16 @@ Typing a digit after a currency symbol dismisses the list and keeps amounts such
 
 `/model <selector>` and `/models <selector>` use native `/switch` semantics: only the current session changes. Bare `/model` and `/models` keep the native management UI. The package does not change model roles, providers, service tiers, or credentials.
 
+## Optional next-step
+
+Next-step is opt-in and runs only in the main TUI. One detached native model request follows a normal completed turn; generation never runs a tool, appends an assistant/user message, or sends a draft. No JEV gate is used. The result is either no UI, one ghost-text recommendation in the empty composer, or 2–3 cards describing existing alternatives. Generation uses bounded recent text context, not tool logs or thinking. Completed-operation wording is allowed in editable user drafts.
+
+Only an empty, focused composer without an active popup can accept a candidate. A single next-step recommendation takes priority in the native ghost slot: Tab/Right adopts it without sending, while explicit Enter adopts and submits it once through native input. Typing immediately discards the ghost and hands completion back to the native editor. Choices start unselected and have no implicit Enter default. Up/Down select a choice and preview its draft; Enter then submits it once, and Tab/Right fill it without sending. While choices are visible, Up/Down do not recall input history; Escape dismisses them. Alt+1/2/3 fills a draft; Alt+/ or `/next-step pick` opens a native selector whose selection does not send. File/slash/skill completion with user text retains native Tab behavior. Session/branch changes, compaction, a new turn, or disabling the feature cancel pending output. Deleting typed text does not revive a stale result. An explicit picker may revisit the current completed result; it still cannot overwrite a draft.
+
+Private local feedback is separate from native conversation history. It preserves `none`, display, draft adoption, actual submission (unchanged/edited/other), cancellations, failures, and neutral session endings. Mere draft adoption is not final acceptance; exiting is not rejection, and missing shutdown after a crash is unknown. Collection can be disabled independently; no automatic upload or JEV training occurs. See [next-step settings and dataset](../packages/next-step/README.md).
+
+Generation failures permit later turns to try again. Dataset write failures disable collection without blocking input or suggestions. Unexpected UI failures follow the process-lifetime disablement below.
+
 ## Failure isolation and compatibility
 
 Input, tool execution, conversation text, answers, and history take priority over optional styling. Each added deferred render, timer, listener, or microtask has its own error boundary. A failed enhancement rolls back what it owns, reports once, and stays disabled for the remainder of the process. Repainting, toggling, or switching sessions must not revive it. Restarting OMP is required to reload the code.

@@ -1,7 +1,7 @@
 {
   "name": "@ifwu/omp-extensions",
-  "version": "0.2.1",
-  "description": "Composer, transcript grouping, ask history, skill completion, and session model switching for Oh My Pi 18.12.6",
+  "version": "0.3.0",
+  "description": "Portable display, input, and optional next-step extensions for Oh My Pi 18.12.6",
   "type": "module",
   "license": "MIT",
   "author": "iFwu",
@@ -16,6 +16,7 @@
   "scripts": {
     "test": "bun run --workspaces --parallel --no-exit-on-error test && python3 -m unittest discover -s tests/integration -v",
     "typecheck": "tsc --noEmit",
+    "preview:next-action": "python3 scripts/preview-next-action.py",
     "smoke:package": "python3 scripts/smoke-package.py"
   },
   "omp": {
@@ -24,8 +25,16 @@
       "packages/transcript-grouping/src/index.ts",
       "packages/ask-history/src/index.ts",
       "packages/skill-completion/src/index.ts",
-      "packages/model-switch/src/index.ts"
-    ]
+      "packages/model-switch/src/index.ts",
+      "packages/next-step/src/index.ts"
+    ],
+    "settings": {
+      "next-step": { "type": "boolean", "default": false, "description": "Generate optional next-step drafts" },
+      "next-step-model": { "type": "string", "default": "@smol", "description": "Independent next-step suggestion model or role" },
+      "next-step-effort": { "type": "string", "default": "low", "description": "Next-step suggestion reasoning effort" },
+      "next-step-collect": { "type": "boolean", "default": true, "description": "Collect private local next-step evaluation events" },
+      "next-step-data-dir": { "type": "string", "description": "Optional private local next-step dataset directory" }
+    }
   },
   "peerDependencies": {
     "@oh-my-pi/pi-ai": "18.12.6",
