@@ -61,7 +61,7 @@ jobs:
       - name: Install development dependencies
         run: |
           bun install --frozen-lockfile
-          python3 -m pip install pyte==0.8.2 PyYAML==6.0.3
+          python3 -m pip install pyte==0.8.2 PyYAML==6.0.3 pexpect==4.9.0
       - name: Typecheck
         run: bun run typecheck
       - name: Run all offline fixture tests

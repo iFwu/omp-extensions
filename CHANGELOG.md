@@ -4,6 +4,8 @@
 
 - Allow next-step generation up to 60 seconds for long-tail provider latency while preserving immediate input cancellation and one extension request per completed turn.
 - Preserve next-step provider and parse failure diagnostics in `/next-step status` and private local feedback, including model, time, stop reason, and a bounded sanitized summary. Keep cancellation, warning frequency, timeout, and retry behavior unchanged.
+- Add the opt-in `@ifwu/omp-secret` workspace and suite entry, with default-off manifest settings, one on-demand `secret` request/list tool, masked input, and retained `/sec` manual management. Credentials remain session-local; reference-bearing foreground Bash runs in an isolated child environment with output redaction, while ordinary Bash delegates natively. This is not a sandbox or a persistent credential store.
+- Preserve the MIT-licensed pi-secret source attribution from commit `dbafa882a72c168198a2417ea6c6215b85c26fe1`. Include standalone source/license payloads and package smoke coverage for default-off installation and explicit opt-in persisted/read back in fresh processes. Keep all package versions at `0.4.0`; these changes are Unreleased, not a new release or npm publication.
 
 ## 0.4.0
 

@@ -44,6 +44,12 @@ def smoke_package(package_directory, install_source=None):
         for entry in manifest["omp"]["extensions"]:
             target = (payload / entry).resolve()
             assert target.is_relative_to(payload.resolve()) and target.is_file(), entry
+            assert (target.parent.parent / "LICENSE").is_file(), entry
+        secret_setting = ("secret" if manifest["name"] == "@ifwu/omp-extensions" else
+                          "enabled" if manifest["name"] == "@ifwu/omp-secret" else None)
+        if secret_setting:
+            setting = manifest["omp"]["settings"][secret_setting]
+            assert setting["type"] == "boolean" and setting["default"] is False, setting
         source = install_source or str(root / "package")
         for args in (["plugin", "install", source], ["plugin", "doctor"], ["plugin", "list", "--json"]):
             result = subprocess.run([binary, *args], cwd=root, env=env, check=True,
@@ -57,12 +63,14 @@ def smoke_package(package_directory, install_source=None):
 
         class Handler(BaseHTTPRequestHandler):
             calls = 0
+            secret_hints = []
 
             def log_message(self, *args):
                 pass
 
             def do_POST(self):
-                self.rfile.read(int(self.headers["Content-Length"]))
+                request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                Handler.secret_hints.append("xd://secret" in json.dumps(request))
                 Handler.calls += 1
                 item = {"type": "message", "id": "msg_smoke", "role": "assistant", "status": "completed",
                         "phase": "final_answer", "content": [{"type": "output_text", "text": TEXT, "annotations": []}]}
@@ -95,61 +103,83 @@ def smoke_package(package_directory, install_source=None):
                               "contextWindow": 100000, "maxTokens": 1024}]}}}
         for name, value in (("config.yml", config), ("models.yml", models)):
             write_yaml(agent / name, value)
-        frames = queue.Queue()
-        with (root / "stderr.log").open("w+") as stderr:
-            process = subprocess.Popen([binary, "--mode", "rpc-ui", "--no-tools", "--no-skills", "--no-rules",
-                                        "--no-title", "--provider", "package-fixture", "--model", "fixture"],
-                                       cwd=root, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                       stderr=stderr, text=True)
-            def collect():
-                for line in process.stdout:
-                    frames.put(json.loads(line))
-                frames.put(None)
-            threading.Thread(target=collect, daemon=True).start()
-            transcript = []
-            def receive(predicate):
-                deadline = time.monotonic() + 90
-                while True:
-                    frame = frames.get(timeout=max(0.01, deadline - time.monotonic()))
-                    if frame is None:
-                        raise AssertionError("OMP exited before smoke completed")
-                    transcript.append(frame)
-                    assert frame.get("type") != "extension_error", frame
-                    assert not (frame.get("type") == "response" and frame.get("success") is False), frame
-                    if predicate(frame):
-                        return frame
-            def send(value):
-                process.stdin.write(json.dumps(value) + "\n")
-                process.stdin.flush()
-            try:
-                receive(lambda frame: frame.get("type") == "ready")
-                send({"id": "state", "type": "get_state"})
-                receive(lambda frame: frame.get("id") == "state")
-                send({"id": "smoke", "type": "prompt", "message": "Reply with the package fixture marker."})
-                result = receive(lambda frame: frame.get("type") == "prompt_result" and frame.get("id") == "smoke")
-                assert result["status"] == "completed", result
-                send({"id": "messages", "type": "get_messages"})
-                messages = receive(lambda frame: frame.get("id") == "messages")
-                assert TEXT in json.dumps(messages), messages
-                assert Handler.calls == 1, Handler.calls
-                process.stdin.close()
-                process.wait(timeout=30)
-                assert process.returncode == 0, process.returncode
-                stderr.seek(0)
-                errors = stderr.read()
-                assert not any(word in errors.lower() for word in ("failed to load extension", "[skill-completion]", "[claude-context]", "[transcript-grouping]", "[ask-history]")), errors
-            except BaseException:
-                stderr.seek(0)
-                print(stderr.read())
-                print(json.dumps(transcript, indent=2))
-                raise
-            finally:
-                if process.poll() is None:
-                    process.kill()
-                    process.wait()
-                server.shutdown()
-                server.server_close()
-        print(f'{manifest["name"]}@{manifest["version"]}: packed payload, plugin install/doctor, and isolated RPC reply completed.')
+        def read_secret_setting(expected):
+            result = subprocess.run([binary, "plugin", "config", "get", manifest["name"], secret_setting, "--json"],
+                                    cwd=root, env=env, check=True, capture_output=True, text=True, timeout=120)
+            assert json.loads(result.stdout) == {secret_setting: expected}, result.stdout
+
+        def rpc_turn(secret_enabled=False, native_bash=True):
+            frames = queue.Queue()
+            calls_before = Handler.calls
+            tool_args = ["--tools", "bash"] if secret_enabled and native_bash else ["--no-tools"]
+            with (root / "stderr.log").open("w+") as stderr:
+                process = subprocess.Popen([binary, "--mode", "rpc-ui", *tool_args, "--no-skills", "--no-rules",
+                                            "--no-title", "--provider", "package-fixture", "--model", "fixture"],
+                                           cwd=root, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                           stderr=stderr, text=True)
+                def collect():
+                    for line in process.stdout:
+                        frames.put(json.loads(line))
+                    frames.put(None)
+                threading.Thread(target=collect, daemon=True).start()
+                transcript = []
+                def receive(predicate):
+                    deadline = time.monotonic() + 90
+                    while True:
+                        frame = frames.get(timeout=max(0.01, deadline - time.monotonic()))
+                        if frame is None:
+                            raise AssertionError("OMP exited before smoke completed")
+                        transcript.append(frame)
+                        assert frame.get("type") != "extension_error", frame
+                        assert not (frame.get("type") == "response" and frame.get("success") is False), frame
+                        if predicate(frame):
+                            return frame
+                def send(value):
+                    process.stdin.write(json.dumps(value) + "\n")
+                    process.stdin.flush()
+                try:
+                    receive(lambda frame: frame.get("type") == "ready")
+                    send({"id": "state", "type": "get_state"})
+                    receive(lambda frame: frame.get("id") == "state")
+                    send({"id": "smoke", "type": "prompt", "message": "Reply with the package fixture marker."})
+                    result = receive(lambda frame: frame.get("type") == "prompt_result" and frame.get("id") == "smoke")
+                    assert result["status"] == "completed", result
+                    send({"id": "messages", "type": "get_messages"})
+                    messages = receive(lambda frame: frame.get("id") == "messages")
+                    assert TEXT in json.dumps(messages), messages
+                    assert Handler.calls == calls_before + 1, Handler.calls
+                    if secret_setting:
+                        assert Handler.secret_hints[-1] is (secret_enabled and native_bash), Handler.secret_hints
+                    process.stdin.close()
+                    process.wait(timeout=30)
+                    assert process.returncode == 0, process.returncode
+                    stderr.seek(0)
+                    errors = stderr.read()
+                    assert not any(word in errors.lower() for word in ("failed to load extension", "[skill-completion]", "[claude-context]", "[transcript-grouping]", "[ask-history]", "[secret]")), errors
+                except BaseException:
+                    stderr.seek(0)
+                    print(stderr.read())
+                    print(json.dumps(transcript, indent=2))
+                    raise
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait()
+        try:
+            if secret_setting:
+                read_secret_setting(False)
+            rpc_turn()
+            if secret_setting:
+                subprocess.run([binary, "plugin", "config", "set", manifest["name"], secret_setting, "true"],
+                               cwd=root, env=env, check=True, capture_output=True, text=True, timeout=120)
+                read_secret_setting(True)
+                rpc_turn(secret_enabled=True)
+                rpc_turn(secret_enabled=True, native_bash=False)
+        finally:
+            server.shutdown()
+            server.server_close()
+        settings_check = "; default-off and persisted opt-in verified in fresh processes" if secret_setting else ""
+        print(f'{manifest["name"]}@{manifest["version"]}: packed payload, plugin install/doctor, and isolated RPC reply completed{settings_check}.')
 
 
 def main():

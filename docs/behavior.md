@@ -56,6 +56,16 @@ Private local feedback is separate from native conversation history. It preserve
 
 Generation failures permit later turns to try again. Dataset write failures disable collection without blocking input or suggestions. Unexpected UI failures follow the process-lifetime disablement below.
 
+## Optional session secrets
+
+Secret handling is disabled by default: the suite setting is `secret: false`, and the standalone package setting is `enabled: false`. Disabled loading registers no secret tool, `/sec` command, hooks, or prompt hint. Enable the installed package with native `omp plugin config set` and start a fresh process, or explicitly pass `--secret` for a source-based run. CLI selection takes precedence over standalone settings, then suite settings; do not load both entry points. No OMP CLI/IPC implementation or 1Password integration is changed.
+
+When enabled with native Bash available, exactly one discoverable agent tool, `secret`, has the actions `request` and `list`. The model reads `xd://secret` for the schema and writes JSON to that URI when needed. The prompt contains only a short discovery hint, not the entire schema. `request` uses masked input and requires at least eight characters with no NUL; cancellation and timeout do not store a value. Tool schemas and results carry names and `{{sec:name}}` references, never raw credentials. `/sec` retains manual management. This feature does not provide credentials to other sessions or persist them for restart/resume: each session owns its in-memory values, and a newly opened session must request them again.
+
+Only reference-bearing foreground Bash commands receive values through an isolated child environment. Raw credentials are not substituted into OMP's execution arguments or temporary output artifacts; captured output is redacted before it is returned. Such commands cannot use PTY, background jobs, services, or native persistent shell state. Bash commands without references delegate to the native tool. With Bash unavailable, secret execution is unavailable rather than bypassing the user's tool selection.
+
+This is disclosure reduction, **not a sandbox or a production-security guarantee**. A child program receives the real credential and can disclose it, use it in its own subprocess arguments, or write it elsewhere. Other code in the process and sufficiently privileged local observers can inspect memory or child environments. Redaction is not proof against transformations, encodings, or malicious programs. Never submit raw credentials in conversation text or tool arguments, and do not treat the extension as a substitute for provider-side least privilege, credential rotation, or a credential manager. The port retains pi-secret's MIT attribution at commit `dbafa882a72c168198a2417ea6c6215b85c26fe1`; see [secret usage and limits](../packages/secret/README.md).
+
 ## Failure isolation and compatibility
 
 Input, tool execution, conversation text, answers, and history take priority over optional styling. Each added deferred render, timer, listener, or microtask has its own error boundary. A failed enhancement rolls back what it owns, reports once, and stays disabled for the remainder of the process. Repainting, toggling, or switching sessions must not revive it. Restarting OMP is required to reload the code.
