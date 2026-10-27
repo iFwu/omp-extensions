@@ -8,7 +8,8 @@ export type FeedbackEvent =
   | { type: "accepted"; indices: number[]; draft: string }
   | { type: "submitted"; outcome: "accepted" | "edited" | "other"; text: string; displayed: boolean; truncated: boolean }
   | { type: "ended"; reason: string; displayed: boolean; accepted: boolean }
-  | { type: "cancelled" | "dismissed" | "skipped" | "failed"; reason: string };
+  | { type: "cancelled" | "dismissed" | "skipped"; reason: string }
+  | { type: "failed"; reason: string; model: string; effort: string; stage: "provider" | "parse"; stopReason?: string; error: string; latencyMs: number };
 
 export function appendFeedback(directory: string, file: string, id: string, event: FeedbackEvent): void {
   mkdirSync(directory, { recursive: true, mode: 0o700 });

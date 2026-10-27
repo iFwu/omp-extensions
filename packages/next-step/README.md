@@ -33,13 +33,15 @@ Cards show the question once, then each title and a brief tradeoff. Tradeoffs al
 
 ## Generation and lifecycle
 
-Generation runs only in the main interactive TUI, after a normal completed answer with no continuation, queued messages, pending plan review, occupied editor, or competing UI focus. The handler schedules background work rather than waiting for inference before returning. It is at most once per run, bounded to 20 seconds and 2,048 requested output tokens. The native transport may retry independently; cancellation does not guarantee the provider has incurred no cost.
+Generation runs only in the main interactive TUI, after a normal completed answer with no continuation, queued messages, pending plan review, occupied editor, or competing UI focus. The handler schedules background work rather than waiting for inference before returning. It is at most once per run, bounded to 60 seconds and 2,048 requested output tokens. No extension-level retry is added; the native transport may retry independently. Input still cancels pending generation immediately, and cancellation does not guarantee the provider has incurred no cost.
 
 The model sees up to two recent real user requests and related completed assistant answers, text only, bounded to 16,000 UTF-16 code units with explicit truncation markers. The latest goal and final answer receive priority. Thinking, tool logs, synthetic users, and custom messages are excluded. This context is sent to the chosen provider; it is not a secret store. The complete generation prompt and its version live in `src/suggestion.ts`.
 
 Only useful optional follow-ups in the latest answer are candidates; earlier turns supply restrictions rather than extra tasks. Completed work, repeated verification, a pause, missing user test results, or unfinished already-requested work should produce `none`. Independent tasks may be combined; ordered steps of one task stay together. Drafts are short requests from the user to the assistant, not instructions for the human, invented user results/preferences, extra planning gates, or detailed implementation briefs. Explicit restrictions and safety prerequisites must survive shortening. These are generation instructions, not semantic phrase filters; the parser enforces structural limits and strict `selectionMode` fields, not factual correctness or the prompt's soft length targets.
 
 Input invalidates pending inference, so late responses cannot overwrite drafts or reappear after delete-to-empty. Already-visible choices survive editing until submission, explicit cancellation, or a session/turn boundary. New turns, switching/branching sessions, compaction, disabling the feature, or changing its model clear current results. Provider errors, timeouts, and invalid JSON leave the main conversation usable and permit a later successful turn. Unexpected UI errors disable the enhancement for the rest of the process.
+
+`/next-step status` includes the current session's most recent failure in this process: timestamp, resolved model/effort, provider or parse stage, provider stop reason when available, and a bounded error summary. It remains available after later successful turns and with collection disabled; it is not restored on restart. The warning stays brief and rate-limited. Summaries retain actionable provider errors while removing URLs, common credential forms, quoted details, embedded structured bodies, subsequent lines, and terminal controls; JSON syntax errors never include response excerpts. Error objects, headers, and response content are not serialized into diagnostics. Treat summaries as private data, since arbitrary provider prose is not guaranteed secret-free. User cancellation is not a failure, and no new retries are added.
 
 ## Private local feedback
 
@@ -57,7 +59,8 @@ Each event has `schema`, `id`, `at`, and `type`; `id` correlates one generation 
 | `accepted` | The actions named by `indices` were copied to the draft; **not** a final acceptance label. |
 | `submitted` | The next interactive non-command input: unchanged accepted draft (`accepted`), changed accepted draft (`edited`), or independently entered text (`other`). Clearing an accepted draft resets that attribution. Submitted text is capped at 16,000 code units and marked when truncated. |
 | `ended` | Session/turn/feature boundary before a classified submission, with displayed/accepted flags. Normal shutdown is neutral, not rejection. |
-| `cancelled`, `dismissed`, `skipped`, `failed` | Distinguish interrupted inference, user dismissal, undisplayed results, and generation failure. |
+| `cancelled`, `dismissed`, `skipped` | Distinguish interrupted inference, user dismissal, and undisplayed results. |
+| `failed` | Failure category (`reason`), resolved `model` and `effort`, `stage` (`provider` or `parse`), optional `stopReason`, sanitized `error` summary, and `latencyMs`. Older records may contain only `reason`. |
 
 A crash/forced kill can leave an open sample without `submitted` or `ended`; treat it as unknown, not a negative. Model outputs of `none` and candidates never shown remain in the dataset so future evaluation can distinguish missed opportunities from rejected suggestions. Slash commands are not classified as independent user feedback. This is observational data, not an automatic quality score or automatic upload pipeline.
 

@@ -7,6 +7,7 @@ import { matchesKey, type TUI } from "@oh-my-pi/pi-tui";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { appendFeedback, type FeedbackEvent } from "./feedback";
 import { choiceRows } from "./cards";
+import { summarizeError } from "./errors";
 import { buildContext, parseSuggestion, PROMPT_VERSION, SYSTEM_PROMPT, type Suggestion } from "./suggestion";
 
 const WIDGET = "ifwu.next-step";
@@ -39,6 +40,7 @@ export default function nextStep(pi: ExtensionAPI) {
   let failed = false;
   let warned = false;
   let outcome = "off";
+  let lastFailure: (Extract<FeedbackEvent, { type: "failed" }> & { at: string; session: string }) | undefined;
   let current: Sample | undefined;
   let visible = false;
   let selected = 0;
@@ -214,7 +216,9 @@ export default function nextStep(pi: ExtensionAPI) {
     record(sample, { type: "requested", ...requested });
     outcome = "generating";
     const started = performance.now();
-    const signal = AbortSignal.any([sample.controller.signal, AbortSignal.timeout(20_000)]);
+    const signal = AbortSignal.any([sample.controller.signal, AbortSignal.timeout(60_000)]);
+    let stage: "provider" | "parse" = "provider";
+    let stopReason: string | undefined;
     try {
       const response = await completeSimple(model, {
         systemPrompt: [SYSTEM_PROMPT],
@@ -225,18 +229,26 @@ export default function nextStep(pi: ExtensionAPI) {
       });
       if (sample.controller.signal.aborted || current !== sample || captured !== revision || sample.session !== ctx.sessionManager.getSessionId()) return;
       sample.pending = false;
-      if (response.stopReason !== "stop") throw new Error("incomplete provider response");
+      stopReason = response.stopReason;
+      if (response.stopReason !== "stop") throw new Error(response.errorMessage || `Provider stopped with ${response.stopReason}`);
+      stage = "parse";
       const result = parseSuggestion(response.content.filter(block => block.type === "text").map(block => block.text).join(""));
       sample.result = result;
       record(sample, { type: "generated", ...requested, result, latencyMs: Math.round(performance.now() - started) });
       if (!available(ctx)) { record(sample, { type: "skipped", reason: "input or UI became busy" }); outcome = "not displayed"; return; }
       if (result.kind === "none") { outcome = "none"; return; }
       try { render(ctx, sample); } catch { fail(ctx); }
-    } catch {
+    } catch (error) {
       if (sample.controller.signal.aborted || current !== sample || captured !== revision) return;
       sample.pending = false;
       outcome = signal.aborted ? "generation timeout" : "generation failed";
-      record(sample, { type: "failed", reason: outcome });
+      lastFailure = {
+        type: "failed", at: new Date().toISOString(), session, reason: outcome, model: modelName, effort,
+        stage, stopReason, error: signal.aborted ? "Generation exceeded the 60-second deadline" : summarizeError(error, stage),
+        latencyMs: Math.round(performance.now() - started),
+      };
+      const { session: _session, ...failure } = lastFailure;
+      record(sample, failure);
       if (!warned) { warned = true; ctx.ui.notify("下一步建议生成失败，本轮不显示；可用 /next-step status 查看原因。", "warning"); }
     }
   }
@@ -403,7 +415,9 @@ export default function nextStep(pi: ExtensionAPI) {
       }
       const sessionFile = ctx.sessionManager.getSessionFile();
       const location = dataDirectory ? resolve(ctx.cwd, dataDirectory) : sessionFile ? join(dirname(sessionFile), "next-step") : "unavailable in ephemeral session";
-      ctx.ui.notify(`下一步建议：${enabled ? "开启" : "关闭"} · ${modelSpec} / ${effort} · ${outcome}\n本地采集：${dataEnabled && !dataFailed ? location : "关闭"}（含对话摘录、候选和下一条发送内容，仅存本机）`, "info");
+      const failure = lastFailure?.session === ctx.sessionManager.getSessionId() ? lastFailure : undefined;
+      const detail = failure ? `\n最近失败：${failure.at} · ${failure.model} / ${failure.effort} · ${failure.stage}${failure.stopReason ? ` / ${failure.stopReason}` : ""}\n${failure.error}` : "";
+      ctx.ui.notify(`下一步建议：${enabled ? "开启" : "关闭"} · ${modelSpec} / ${effort} · ${outcome}${detail}\n本地采集：${dataEnabled && !dataFailed ? location : "关闭"}（含对话摘录、候选和下一条发送内容，仅存本机）`, "info");
     },
   });
 }

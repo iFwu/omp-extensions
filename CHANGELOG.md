@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Allow next-step generation up to 60 seconds for long-tail provider latency while preserving immediate input cancellation and one extension request per completed turn.
+- Preserve next-step provider and parse failure diagnostics in `/next-step status` and private local feedback, including model, time, stop reason, and a bounded sanitized summary. Keep cancellation, warning frequency, timeout, and retry behavior unchanged.
+
 ## 0.4.0
 
 - Require `selectionMode` on choice suggestions. Focus the first action by default, use Space to check combinable tasks, and join checked drafts in option order for Enter submission or Tab/Right filling.

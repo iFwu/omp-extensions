@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s packages/next-step/tests -v
 Set OMP_BIN to a native OMP binary if it is not discoverable on PATH.
 """
 import importlib.util
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -57,10 +58,13 @@ export default function(pi) {
  let host;
  let observedUI;
  const widgets={};
+ const notifications=[];
  if (''' + json.dumps(delayed_input) + ''') pi.on("input",async()=>{await new Promise(resolve=>setTimeout(resolve,80));});
  pi.on("session_start",(_event,ctx)=>{
   if(observedUI!==ctx.ui){
    observedUI=ctx.ui;
+   const notify=ctx.ui.notify.bind(ctx.ui);
+   ctx.ui.notify=(message,level)=>{notifications.push({message,level});return notify(message,level);};
    const setWidget=ctx.ui.setWidget.bind(ctx.ui);
    ctx.ui.setWidget=(key,content,options)=>{
     delete widgets[key];
@@ -85,7 +89,7 @@ export default function(pi) {
   clearInterval(timer);
   timer=setInterval(()=>{
    const path=''' + json.dumps(str(self.snapshot)) + ''';
-   writeFileSync(path+".tmp",JSON.stringify({text:ctx.ui.getEditorText(),expanded:editor?.getExpandedText(),active:editor?.isAutocompleteActive(),rows:editor?.render(100).map(row=>Bun.stripANSI(row)),widgets,overlay:host?.hasOverlay(),editorFocused:host?.getFocused()===editor,sessionFile:ctx.sessionManager.getSessionFile(),sessionId:ctx.sessionManager.getSessionId()}));
+   writeFileSync(path+".tmp",JSON.stringify({text:ctx.ui.getEditorText(),expanded:editor?.getExpandedText(),active:editor?.isAutocompleteActive(),rows:editor?.render(100).map(row=>Bun.stripANSI(row)),widgets,notifications,overlay:host?.hasOverlay(),editorFocused:host?.getFocused()===editor,sessionFile:ctx.sessionManager.getSessionFile(),sessionId:ctx.sessionManager.getSessionId()}));
    renameSync(path+".tmp",path);
   },30);
  });
@@ -621,6 +625,32 @@ class NextStepTUITests(unittest.TestCase):
                 session.ready("decision")
                 self.doCleanups()
 
+    def test_slow_generation_survives_twenty_seconds_and_still_has_a_deadline(self):
+        session = NativeSession(self)
+        session.server.next_suggestion(delay=21)
+        session.scene("ready")
+        generated = session.wait(lambda: next(iter(session.events("generated")), None),
+                                 "long-tail suggestion generated", timeout=30)
+        self.assertGreaterEqual(generated["latencyMs"], 20_000)
+        session.event("displayed")
+        session.send("\t")
+        session.expect_draft(preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"])
+        session.clear()
+
+        session.server.next_suggestion(delay=65)
+        session.scene("ready")
+        requested = session.events("requested")[-1]
+        failed = session.wait(lambda: next((event for event in session.events("failed")
+                                           if event["id"] == requested["id"]), None),
+                              "generation deadline", timeout=70)
+        self.assertEqual(failed["reason"], "generation timeout")
+        elapsed = (datetime.fromisoformat(failed["at"]) - datetime.fromisoformat(requested["at"])).total_seconds()
+        self.assertGreaterEqual(elapsed, 59)
+        self.assertLess(elapsed, 64)
+        self.assertEqual(len(session.events("displayed")), 1)
+        self.assertEqual(len(session.requests(suggestion=True)), 2)
+        session.ready("decision")
+
     def test_delayed_result_stays_cancelled_after_typing_and_delete_to_empty(self):
         session = NativeSession(self)
         session.server.next_suggestion(delay=1.5)
@@ -631,6 +661,7 @@ class NextStepTUITests(unittest.TestCase):
         session.expect_draft("")
         session.event("cancelled")
         session.drain(1.8)
+        self.assertEqual(session.events("failed"), [], "Typing cancels inference without recording a failure")
         self.assertEqual(session.events("displayed"), [], "Deleting typed text must not revive stale results")
         session.send("\x1b1")
         session.expect_draft("")
@@ -672,7 +703,19 @@ class NextStepTUITests(unittest.TestCase):
                 shown = len(session.events("displayed"))
                 session.server.next_suggestion(mode)
                 session.scene("ready")
-                session.event("failed", after=count)
+                failure = session.event("failed", after=count)
+                expected = "Injected preview suggestion failure" if mode == "failure" else "Invalid suggestion JSON"
+                self.assertIn(expected, failure["error"])
+                self.assertEqual(failure["stage"], "provider" if mode == "failure" else "parse")
+                self.assertEqual(failure["stopReason"], "error" if mode == "failure" else "stop")
+                self.assertEqual(failure["model"], preview.SUGGESTION_MODEL)
+                notifications = len(session.state().get("notifications", []))
+                session.send("/next-step status\r")
+                status = session.wait(lambda: next((item["message"] for item in session.state().get("notifications", [])[notifications:]
+                                                   if "最近失败" in item["message"]), None), "failure status")
+                self.assertIn(expected, status)
+                self.assertIn(failure["at"], status)
+                self.assertIn(failure["model"], status)
                 self.assertEqual(len(session.events("displayed")), shown)
                 session.expect_draft("")
                 session.ready("decision")
