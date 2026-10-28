@@ -68,3 +68,59 @@ def write_grouping_clock(directory):
         '  grouping(pi, () => Number(readFileSync(clock, "utf8")));\n'
         '}\n', encoding="utf-8")
     return wrapper
+
+
+def set_next_step_time(directory, milliseconds):
+    """Advance only next-step generation time, atomically across fixture processes."""
+    root = Path(directory)
+    pending = root / "next-step-clock.pending"
+    pending.write_text(str(milliseconds), encoding="utf-8")
+    pending.replace(root / "next-step-clock.json")
+
+
+def write_next_step_clock(directory):
+    """Control real next-step generation timing without replacing host timers."""
+    root = Path(directory).resolve()
+    set_next_step_time(root, 0)
+    wrapper = root / "next-step-clock.ts"
+    # Relative imports keep the source inside OMP's SDK-shim module graph.
+    source = "./" + Path(os.path.relpath(extension_path("next-step").resolve(), root)).as_posix()
+    wrapper.write_text(
+        'import { readFileSync, writeFileSync, renameSync } from "node:fs";\n'
+        'import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";\n'
+        f'import nextStep from {json.dumps(source)};\n'
+        'const clock = new URL("./next-step-clock.json", import.meta.url);\n'
+        'const observedClock = new URL("./next-step-clock-observed.json", import.meta.url);\n'
+        'const observedPending = new URL("./next-step-clock-observed.pending", import.meta.url);\n'
+        'export default function (pi: ExtensionAPI) {\n'
+        '  const now = () => Number(readFileSync(clock, "utf8"));\n'
+        '  const pending = new Map<AbortController, number>();\n'
+        '  let observed: number | undefined;\n'
+        '  const poll = setInterval(() => {\n'
+        '    const current = now();\n'
+        '    for (const [controller, deadline] of pending) {\n'
+        '      if (current < deadline) continue;\n'
+        '      pending.delete(controller);\n'
+        '      controller.abort(new DOMException("The operation timed out.", "TimeoutError"));\n'
+        '    }\n'
+        '    if (current !== observed) {\n'
+        '      writeFileSync(observedPending, String(current));\n'
+        '      renameSync(observedPending, observedClock);\n'
+        '      observed = current;\n'
+        '    }\n'
+        '  }, 10);\n'
+        '  poll.unref();\n'
+        '  nextStep(pi, {\n'
+        '    now,\n'
+        '    timeout(milliseconds: number) {\n'
+        '      const controller = new AbortController();\n'
+        '      pending.set(controller, now() + milliseconds);\n'
+        '      return controller.signal;\n'
+        '    },\n'
+        '  });\n'
+        '  pi.on("session_shutdown", () => {\n'
+        '    clearInterval(poll);\n'
+        '    pending.clear();\n'
+        '  });\n'
+        '}\n', encoding="utf-8")
+    return wrapper

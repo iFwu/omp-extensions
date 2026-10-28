@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-skill-completion",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Native OMP skill completion with dollar and Chinese currency triggers",
   "type": "module",
   "license": "MIT",

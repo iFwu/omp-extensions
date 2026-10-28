@@ -4,7 +4,6 @@ Run: python3 -m unittest discover -s packages/next-step/tests -v
 Set OMP_BIN to a native OMP binary if it is not discoverable on PATH.
 """
 import importlib.util
-from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -12,8 +11,11 @@ import select
 import struct
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
+
+from test_support import set_next_step_time, write_next_step_clock
 
 if os.name == "posix":
     import fcntl
@@ -41,11 +43,14 @@ def popup_shows(session, label):
 
 
 class NativeSession:
-    def __init__(self, testcase, persistent=None, delayed_input=False):
+    def __init__(self, testcase, persistent=None, delayed_input=False, controlled_time=False):
         self.testcase = testcase
         self.directory = tempfile.TemporaryDirectory(prefix="omp-next-step-test-")
         self.root = Path(self.directory.name)
+        self.process = None
+        self.master = None
         self.server = preview.FixtureServer(delay=0.05).start()
+        testcase.addCleanup(self.close)
         self.snapshot = self.root / "editor.json"
         observer = self.root / "observer.ts"
         # Observe the composed native editor and actual widget renders, not terminal scrollback.
@@ -97,6 +102,9 @@ export default function(pi) {
 }
 ''')
         command, env = preview.offline_launch(OMP_BIN, self.root, self.server, extra_extensions=[observer])
+        if controlled_time:
+            source = str(REPO / "packages/next-step/src/index.ts")
+            command[command.index(source)] = str(write_next_step_clock(self.root))
         if persistent:
             package, name, settings = PERSISTENT[persistent]
             command.remove("--next-step")
@@ -112,16 +120,21 @@ export default function(pi) {
         self.command = command
         self.env = env
         self.start(command)
-        testcase.addCleanup(self.close)
         self.wait(lambda: self.snapshot.exists(), "editor startup", timeout=30)
 
     def start(self, command):
-        self.master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 45, 110, 0, 0))
-        self.process = subprocess.Popen(command, cwd=self.root, env=self.env, stdin=slave, stdout=slave,
-                                        stderr=slave, start_new_session=True)
-        os.close(slave)
         self.output = bytearray()
+        self.master, slave = pty.openpty()
+        try:
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 45, 110, 0, 0))
+            self.process = subprocess.Popen(command, cwd=self.root, env=self.env, stdin=slave, stdout=slave,
+                                            stderr=slave, start_new_session=True)
+        except BaseException:
+            os.close(self.master)
+            self.master = None
+            raise
+        finally:
+            os.close(slave)
 
     def restart(self, resume=False):
         session_file = self.state()["sessionFile"] if resume else None
@@ -186,6 +199,12 @@ export default function(pi) {
             self.drain()
         self.testcase.fail(f"Timed out: {description}\n{self.output[-8000:].decode(errors='replace')}")
 
+    def set_time(self, milliseconds):
+        set_next_step_time(self.root, milliseconds)
+        observed = self.root / "next-step-clock-observed.json"
+        self.wait(lambda: observed.exists() and json.loads(observed.read_text()) == milliseconds,
+                  f"next-step clock observed {milliseconds}ms")
+
     def send(self, text):
         os.write(self.master, text.encode())
         self.drain(0.12)
@@ -238,20 +257,31 @@ export default function(pi) {
         self.expect_draft("")
 
     def stop(self):
-        if self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
-        os.close(self.master)
+        try:
+            if self.process is not None and self.process.poll() is None:
+                self.process.terminate()
+                deadline = time.monotonic() + 5
+                while self.process.poll() is None and (remaining := deadline - time.monotonic()) > 0:
+                    self.drain(min(0.08, remaining))
+                if self.process.poll() is None:
+                    self.process.kill()
+                    self.process.wait(timeout=5)
+        finally:
+            if self.master is not None:
+                os.close(self.master)
+                self.master = None
 
     def close(self):
-        self.stop()
-        self.server.shutdown()
-        self.server.server_close()
-        self.directory.cleanup()
+        try:
+            self.stop()
+        finally:
+            try:
+                self.server.shutdown()
+            finally:
+                try:
+                    self.server.server_close()
+                finally:
+                    self.directory.cleanup()
 
 
 @unittest.skipUnless(os.name == "posix" and OMP_BIN, "Native POSIX OMP 18.12.6 binary required")
@@ -626,30 +656,45 @@ class NextStepTUITests(unittest.TestCase):
                 self.doCleanups()
 
     def test_slow_generation_survives_twenty_seconds_and_still_has_a_deadline(self):
-        session = NativeSession(self)
-        session.server.next_suggestion(delay=21)
+        session = NativeSession(self, controlled_time=True)
+        first_release = threading.Event()
+        session.server.next_suggestion(delay=0, gate=first_release)
         session.scene("ready")
-        generated = session.wait(lambda: next(iter(session.events("generated")), None),
-                                 "long-tail suggestion generated", timeout=30)
-        self.assertGreaterEqual(generated["latencyMs"], 20_000)
+        session.wait(lambda: len(session.requests(suggestion=True)) == 1, "long-tail suggestion started")
+        session.set_time(21_000)
+        first_release.set()
+        generated = session.event("generated")
+        self.assertEqual(generated["latencyMs"], 21_000)
         session.event("displayed")
         session.send("\t")
         session.expect_draft(preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"])
         session.clear()
 
-        session.server.next_suggestion(delay=65)
+        second_release = threading.Event()
+        session.server.next_suggestion(delay=0, gate=second_release)
         session.scene("ready")
-        requested = session.events("requested")[-1]
-        failed = session.wait(lambda: next((event for event in session.events("failed")
-                                           if event["id"] == requested["id"]), None),
-                              "generation deadline", timeout=70)
+        session.wait(lambda: len(session.requests(suggestion=True)) == 2, "deadline suggestion started")
+        requested = session.event("requested", after=1)
+        session.set_time(21_000 + 59_999)
+        self.assertEqual([event["type"] for event in session.events() if event["id"] == requested["id"]],
+                         ["requested"], "The real provider request must remain pending before its deadline")
+        session.expect_no_suggestion()
+
+        session.set_time(21_000 + 60_000)
+        failed = session.event("failed", predicate=lambda event: event["id"] == requested["id"])
         self.assertEqual(failed["reason"], "generation timeout")
-        elapsed = (datetime.fromisoformat(failed["at"]) - datetime.fromisoformat(requested["at"])).total_seconds()
-        self.assertGreaterEqual(elapsed, 59)
-        self.assertLess(elapsed, 64)
+        self.assertEqual(failed["latencyMs"], 60_000)
+        session.expect_no_suggestion()
+        self.assertEqual(len(session.events("generated")), 1)
         self.assertEqual(len(session.events("displayed")), 1)
-        self.assertEqual(len(session.requests(suggestion=True)), 2)
+        self.assertEqual(len(session.requests(suggestion=True)), 2, "Deadline failure must not retry")
+
+        second_release.set()
         session.ready("decision")
+        session.send("\t")
+        session.expect_draft(preview.FIXTURES["decision"]["suggestion"]["actions"][0]["draft"])
+        self.assertEqual(len(session.events("failed")), 1)
+        self.assertEqual(len(session.requests(suggestion=True)), 3, "Recovery makes one new suggestion request")
 
     def test_delayed_result_stays_cancelled_after_typing_and_delete_to_empty(self):
         session = NativeSession(self)

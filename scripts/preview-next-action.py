@@ -71,11 +71,14 @@ class FixtureServer(ThreadingHTTPServer):
         self.requests = []
         self.controls = deque()
         self.lock = threading.Lock()
-        self.current_control = ("normal", self.delay)
+        self.current_control = ("normal", self.delay, None)
+        self.request_gates = set()
 
-    def next_suggestion(self, mode="normal", delay=None):
+    def next_suggestion(self, mode="normal", delay=None, *, gate=None):
         with self.lock:
-            self.controls.append((mode, self.delay if delay is None else delay))
+            self.controls.append((mode, self.delay if delay is None else delay, gate))
+            if gate is not None:
+                self.request_gates.add(gate)
 
     def model_requests(self, model):
         with self.lock:
@@ -84,6 +87,12 @@ class FixtureServer(ThreadingHTTPServer):
     def start(self):
         threading.Thread(target=self.serve_forever, daemon=True).start()
         return self
+
+    def shutdown(self):
+        with self.lock:
+            for gate in self.request_gates:
+                gate.set()
+        super().shutdown()
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -113,16 +122,20 @@ class FixtureHandler(BaseHTTPRequestHandler):
             if not suggestion:
                 delay_match = re.search(r"\[preview:delay=([\d.]+)\]", serialized)
                 mode = "invalid" if "[preview:invalid]" in serialized else "failure" if "[preview:failure]" in serialized else "normal"
-                self.server.current_control = (mode, float(delay_match[1]) if delay_match else self.server.delay)
-            mode, delay = (self.server.controls.popleft() if self.server.controls else self.server.current_control) if suggestion else ("normal", 0)
+                self.server.current_control = (mode, float(delay_match[1]) if delay_match else self.server.delay, None)
+            mode, delay, gate = (self.server.controls.popleft() if self.server.controls else self.server.current_control) if suggestion else ("normal", 0, None)
+        if gate is not None:
+            gate.wait()
+            with self.server.lock:
+                self.server.request_gates.discard(gate)
         time.sleep(max(0, delay))
         if mode == "failure":
             data = json.dumps({"error": {"message": "Injected preview suggestion failure", "type": "invalid_request_error"}}).encode()
-            self.send_response(400)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
             try:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
                 self.wfile.write(data)
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -132,10 +145,10 @@ class FixtureHandler(BaseHTTPRequestHandler):
                 "phase": "final_answer", "content": [{"type": "output_text", "text": text, "annotations": []}]}
         response = {"id": "resp_preview", "object": "response", "status": "completed", "output": [item],
                     "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.end_headers()
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
             for kind, data in [
                 ("response.created", {"response": response | {"status": "in_progress", "output": []}}),
                 ("response.output_item.added", {"output_index": 0, "item": item | {"content": []}}),

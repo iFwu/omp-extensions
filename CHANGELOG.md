@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- Drain next-step fixture PTY output while waiting for SIGTERM shutdown, avoiding blocked terminal writes and repeated five-second waits before forced termination.
+- Replace real 21-second/60-second suggestion timing waits with an extension-scoped clock and deadline signal. Keep real provider requests, input acceptance, cancellation, timeout classification, and later-turn recovery under test. Production deadlines, global clocks, and native scheduling remain unchanged.
+
 ## 0.5.2
 
 - Replace the remaining two 121-second grouping fixture waits with a controllable clock injected only into the real grouping extension. Keep native OMP events, stream completion, rendered labels, foreground-tool accounting, toggles, and session transitions under test; host clocks, timeouts, and production thresholds remain unchanged.

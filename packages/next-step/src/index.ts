@@ -24,7 +24,10 @@ interface Sample {
   result?: Suggestion;
 }
 
-export default function nextStep(pi: ExtensionAPI) {
+export default function nextStep(pi: ExtensionAPI, timing = {
+  now: () => performance.now(),
+  timeout: (milliseconds: number) => AbortSignal.timeout(milliseconds),
+}) {
   pi.registerFlag("next-step", { type: "boolean", description: "Generate optional next-step drafts after completed turns" });
   pi.registerFlag("next-step-model", { type: "string", description: "Next-step model selector; independent of the main model" });
   pi.registerFlag("next-step-effort", { type: "string", description: "Next-step reasoning effort" });
@@ -215,8 +218,8 @@ export default function nextStep(pi: ExtensionAPI) {
     const requested = { context: snapshot, model: modelName, effort, promptVersion: PROMPT_VERSION };
     record(sample, { type: "requested", ...requested });
     outcome = "generating";
-    const started = performance.now();
-    const signal = AbortSignal.any([sample.controller.signal, AbortSignal.timeout(60_000)]);
+    const started = timing.now();
+    const signal = AbortSignal.any([sample.controller.signal, timing.timeout(60_000)]);
     let stage: "provider" | "parse" = "provider";
     let stopReason: string | undefined;
     try {
@@ -234,7 +237,7 @@ export default function nextStep(pi: ExtensionAPI) {
       stage = "parse";
       const result = parseSuggestion(response.content.filter(block => block.type === "text").map(block => block.text).join(""));
       sample.result = result;
-      record(sample, { type: "generated", ...requested, result, latencyMs: Math.round(performance.now() - started) });
+      record(sample, { type: "generated", ...requested, result, latencyMs: Math.round(timing.now() - started) });
       if (!available(ctx)) { record(sample, { type: "skipped", reason: "input or UI became busy" }); outcome = "not displayed"; return; }
       if (result.kind === "none") { outcome = "none"; return; }
       try { render(ctx, sample); } catch { fail(ctx); }
@@ -245,7 +248,7 @@ export default function nextStep(pi: ExtensionAPI) {
       lastFailure = {
         type: "failed", at: new Date().toISOString(), session, reason: outcome, model: modelName, effort,
         stage, stopReason, error: signal.aborted ? "Generation exceeded the 60-second deadline" : summarizeError(error, stage),
-        latencyMs: Math.round(performance.now() - started),
+        latencyMs: Math.round(timing.now() - started),
       };
       const { session: _session, ...failure } = lastFailure;
       record(sample, failure);

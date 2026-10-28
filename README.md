@@ -11,7 +11,7 @@ This package targets **OMP 18.12.6**; development and CI use Bun **1.4.4**. OMP 
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.5.2
+omp plugin install github:iFwu/omp-extensions#v0.5.3
 omp plugin doctor
 ```
 
@@ -58,8 +58,8 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.5.2 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.5.2
-omp plugin install ./omp-extensions-v0.5.2/packages/skill-completion
+git clone --branch v0.5.3 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.5.3
+omp plugin install ./omp-extensions-v0.5.3/packages/skill-completion
 omp plugin doctor
 ```
 
@@ -67,16 +67,16 @@ OMP keeps a local link to that package directory: retain the checkout and keep i
 
 ### Session-secret opt-in
 
-Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.5.2` checkout created above:
+Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.5.3` checkout created above:
 
 ```sh
 # Suite
-omp plugin install github:iFwu/omp-extensions#v0.5.2
+omp plugin install github:iFwu/omp-extensions#v0.5.3
 omp plugin config set @ifwu/omp-extensions secret true
 omp plugin config get @ifwu/omp-extensions secret --json
 
 # Alternatively, standalone (do not install alongside the suite)
-omp plugin install ./omp-extensions-v0.5.2/packages/secret
+omp plugin install ./omp-extensions-v0.5.3/packages/secret
 omp plugin config set @ifwu/omp-secret enabled true
 omp plugin config get @ifwu/omp-secret enabled --json
 ```
