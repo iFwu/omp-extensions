@@ -13,7 +13,7 @@ import threading
 import time
 import unittest
 
-from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
+from test_support import OMP_BIN, extension_path, isolated_env, set_grouping_time, write_grouping_clock, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -24,7 +24,7 @@ if os.name == "posix":
 @unittest.skipUnless(os.name == "posix" and OMP_BIN, "POSIX OMP TUI required")
 class ExtensionIsolationTests(unittest.TestCase):
     @contextmanager
-    def session(self, *extensions, final_stream_seconds=0, stream_chunks=False):
+    def session(self, *extensions, gated_final=False, stream_chunks=False):
         requests = []
         gate = threading.Event()
         gate.set()
@@ -46,7 +46,7 @@ class ExtensionIsolationTests(unittest.TestCase):
                     text = "BEFORE_TOOLS" if turn == 1 else "LIVE_BODY" if turn == 2 else f"FOLLOWUP_{turn}_OK"
                     if stream_chunks and turn == 2:
                         text = "STREAM_BODY " + " ".join(f"chunk{n}" for n in range(24))
-                    long_final = final_stream_seconds and turn == 1
+                    long_final = gated_final and turn == 1
                     if long_final:
                         text = "FINAL_STREAM_START\nFINAL_STREAM_END"
                     output = [{"type": "message", "id": f"msg_{turn}", "role": "assistant", "status": "completed",
@@ -84,7 +84,8 @@ class ExtensionIsolationTests(unittest.TestCase):
                             elif item["type"] == "message":
                                 if long_final:
                                     event("response.output_text.delta", output_index=index, item_id=item["id"], delta="FINAL_STREAM_START\n")
-                                    time.sleep(final_stream_seconds)
+                                    if not gate.wait(20):
+                                        return
                                     event("response.output_text.delta", output_index=index, item_id=item["id"], delta="FINAL_STREAM_END")
                                 else:
                                     if stream_chunks and turn == 2:
@@ -169,6 +170,7 @@ export default function(pi) {
    ctx.ui.setWidget("capture",tui=>{
      const messages=tui.children.filter(c=>c instanceof TranscriptContainer).flatMap(c=>c.children.filter(m=>m instanceof AssistantMessageComponent).map(m=>m.render(80).map(r=>Bun.stripANSI(r))));
      writeFileSync(new URL("./snapshot.json",import.meta.url),JSON.stringify(messages));
+     writeFileSync(new URL("./host-clock.json",import.meta.url),JSON.stringify({monotonic:performance.now(),wall:Date.now()}));
      return {render:()=>[],invalidate(){}};
    });
    ctx.ui.setWidget("capture",undefined);
@@ -217,7 +219,8 @@ export default function(pi) {
             command = [OMP_BIN, "--cwd", directory, "--model", "isolation/fixture", "--tools", "read",
                        "--no-extensions", "-e", str(injector), "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--thinking", "low"]
             for extension in extensions:
-                command.extend(["-e", str(extension_path(extension))])
+                entrypoint = write_grouping_clock(root) if gated_final and extension == "transcript-grouping" else extension_path(extension)
+                command.extend(["-e", str(entrypoint)])
             if stream_chunks:
                 command.extend(["-e", str(observer)])
             process = subprocess.Popen(command, env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
@@ -250,7 +253,7 @@ export default function(pi) {
                 os.write(master, text.encode() + (b"\r" if submit else b""))
 
             def settled(turn, timeout=15):
-                expected = "FINAL_STREAM_START\nFINAL_STREAM_END" if final_stream_seconds and turn == 1 else (
+                expected = "FINAL_STREAM_START\nFINAL_STREAM_END" if gated_final and turn == 1 else (
                     "LIVE_BODY" if turn == 2 else f"FOLLOWUP_{turn}_OK")
                 if stream_chunks and turn == 2:
                     expected = "STREAM_BODY " + " ".join(f"chunk{n}" for n in range(24))
@@ -383,29 +386,40 @@ export default function(pi) {
             settled(3)
 
     def test_final_crossing_two_minutes_during_stream_gets_completed_marker(self):
-        with self.session("transcript-grouping", final_stream_seconds=121) as (root, process, requests, gate, blocked, send, see, until, settled, output):
-            started = time.monotonic()
+        with self.session("transcript-grouping", gated_final=True) as (root, process, requests, gate, blocked, send, see, until, settled, output):
+            gate.clear()
             send("Stream a final answer across the two-minute threshold.")
             see("FINAL_STREAM_START")
             snapshot_path = root / "snapshot.json"
+            host_clock_path = root / "host-clock.json"
             send("/capture-transcript")
-            until(snapshot_path.exists, "early final snapshot")
+            until(lambda: snapshot_path.exists() and host_clock_path.exists(), "early final snapshot")
             self.assertNotIn("Done", snapshot_path.read_text())
-            settled(1, timeout=145)
+            host_before = json.loads(host_clock_path.read_text())
+            set_grouping_time(root, 121000)
+            gate.set()
+            settled(1)
             snapshot_path.unlink()
+            host_clock_path.unlink()
             send("/capture-transcript")
-            until(snapshot_path.exists, "completed final snapshot")
+            until(lambda: snapshot_path.exists() and host_clock_path.exists(), "completed final snapshot")
             rows = [row for message in json.loads(snapshot_path.read_text()) for row in message]
             marker = next(row for row in rows if "Done" in row)
-            self.assertRegex(marker, r"^ ══ Done · 2m\d{2}s ═+$")
+            self.assertRegex(marker, r"^ ══ Done · 2m01s ═+$")
             self.assertNotIn("⟡", "\n".join(rows))
+            self.assertIn("FINAL_STREAM_START", "\n".join(rows))
             self.assertIn("FINAL_STREAM_END", "\n".join(rows))
-            self.assertGreaterEqual(time.monotonic() - started, 120)
+            host_after = json.loads(host_clock_path.read_text())
+            self.assertGreater(host_after["monotonic"], host_before["monotonic"])
+            for clock in ("monotonic", "wall"):
+                elapsed = host_after[clock] - host_before[clock]
+                self.assertGreaterEqual(elapsed, 0)
+                self.assertLess(elapsed, 120000, f"grouping clock leaked into host {clock} clock")
             self.assertNotIn("Grouping disabled", output.decode(errors="replace"))
             send("Continue after the long final.")
             settled(2)
             self.assertIsNone(process.poll())
-            print(f"Real OMP: final started before threshold, completed after {time.monotonic() - started:.1f}s -> {marker.strip()}")
+            print(f"Real OMP: gated final completed at grouping time 121000ms -> {marker.strip()}")
 
 
 if __name__ == "__main__":

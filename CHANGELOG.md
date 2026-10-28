@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Replace the remaining two 121-second grouping fixture waits with a controllable clock injected only into the real grouping extension. Keep native OMP events, stream completion, rendered labels, foreground-tool accounting, toggles, and session transitions under test; host clocks, timeouts, and production thresholds remain unchanged.
+- Advance the provider-only gap on the same simulated timeline instead of sleeping for 12 seconds. Assert exact simulated durations without mocking state or rendering results. Full cross-platform CI remains asynchronous.
+
 ## 0.5.1
 
 - Remove persistent secret status badges at startup, after credential input, and after management commands. Use `/sec list` on demand; credential entry and execution are unchanged.

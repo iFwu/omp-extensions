@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 import select
-import re
 import shutil
 import struct
 import subprocess
@@ -13,7 +12,7 @@ import threading
 import time
 import unittest
 
-from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
+from test_support import OMP_BIN, isolated_env, set_grouping_time, write_grouping_clock, write_yaml
 
 if os.name == "posix":
     import fcntl
@@ -26,7 +25,6 @@ class GroupingTuiTests(unittest.TestCase):
     def test_hidden_work_final_boundary_and_independent_toggle(self):
         requests = []
         fixture_root = None
-        timing = {}
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -87,15 +85,15 @@ class GroupingTuiTests(unittest.TestCase):
                 self.end_headers()
                 for kind, data in events:
                     if turn == 3 and kind == "response.output_item.added" and data["output_index"] == 1:
-                        started = time.monotonic()
-                        time.sleep(12)
-                        timing["long_gap"] = time.monotonic() - started
-                    if turn == 4 and kind == "response.output_item.added" and data["output_index"] == 0:
-                        timing["final_gap"] = time.monotonic() - timing["last_commentary"]
+                        # The driver acknowledges the actual rendered commentary before
+                        # releasing the next provider event at grouping time 133s.
+                        deadline = time.monotonic() + 10
+                        while not (fixture_root / "provider-gap-ready").exists():
+                            if time.monotonic() >= deadline:
+                                raise TimeoutError("OMP did not consume THIRD_COMMENTARY")
+                            time.sleep(0.01)
                     self.wfile.write(f"event: {kind}\ndata: {json.dumps({'type': kind} | data)}\n\n".encode())
                     self.wfile.flush()
-                    if turn == 3 and kind == "response.output_text.delta" and data["output_index"] == 1:
-                        timing["last_commentary"] = time.monotonic()
 
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.addCleanup(server.server_close)
@@ -105,17 +103,21 @@ class GroupingTuiTests(unittest.TestCase):
             root = Path(directory)
             fixture_root = root
             (root / "input.txt").write_text("grouping fixture\n")
+            grouping = write_grouping_clock(root)
             snapshot = root / "screen.json"
             observer = root / "observer.ts"
             observer.write_text('''
 import { TranscriptContainer } from "@oh-my-pi/pi-tui/chrome/transcript-container";
 import { AssistantMessageComponent } from "@oh-my-pi/pi-tui/chat/assistant-message";
 import { writeFileSync } from "node:fs";
+import { setGroupingTime } from "./grouping-clock.ts";
 export default function(pi) {
+  pi.on("tool_execution_start", ({toolName}) => {
+    if (toolName === "grouping_wait") setGroupingTime(121000);
+  });
   pi.registerTool({name:"grouping_wait", label:"Fixture wait", description:"Wait at the external tool boundary",
     parameters:{type:"object",properties:{}},
     async execute() {
-      await new Promise(resolve=>setTimeout(resolve,121000));
       return {content:[{type:"text",text:"Foreground wait completed"}],details:{}};
     }});
   pi.registerCommand("grouping-snapshot", {description:"Read rendered transcript for the offline smoke",handler:(args,ctx)=>{
@@ -152,7 +154,7 @@ export default function(pi) {
                 self.addCleanup(os.close, master)
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 80, 0, 0))
                 command = [OMP_BIN, "--cwd", directory, "--model", "grouping-test/fixture", "--tools", "read,grouping_wait",
-                           "--no-extensions", "-e", str(extension_path("transcript-grouping")), "-e", str(observer),
+                           "--no-extensions", "-e", str(grouping), "-e", str(observer),
                            "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--thinking", "off",
                            "--session-dir", str(root / "sessions")]
                 if resume:
@@ -208,7 +210,10 @@ export default function(pi) {
             try:
                 wait_for("Fixture")
                 os.write(master, b"Exercise grouping.\r")
-                wait_for("FINAL_DONE", timeout=200)
+                wait_for("THIRD_COMMENTARY", timeout=30)
+                set_grouping_time(root, 133000)
+                (root / "provider-gap-ready").write_text("ready")
+                wait_for("FINAL_DONE", timeout=30)
                 drain(0.5)
                 messages = capture()
                 rendered = "\n".join(row for message in messages for row in message)
@@ -219,26 +224,20 @@ export default function(pi) {
                 self.assertIn("1 failed", rendered)
                 long_gap = rendered[rendered.index("SECOND_COMMENTARY"):rendered.index("THIRD_COMMENTARY")].splitlines()
                 long_marker = next(row for row in long_gap if "⟡" in row)
-                blocking = re.search(r"^ 2m\d{2}s · ⟡ (\d+)m(\d{2})s · 10 tools", long_marker)
-                self.assertIsNotNone(blocking, long_marker)
-                self.assertGreaterEqual(int(blocking[1]) * 60 + int(blocking[2]), 120)
-                self.assertLess(int(blocking[1]) * 60 + int(blocking[2]), 130)
+                self.assertRegex(long_marker, r"^ 2m01s · ⟡ 2m01s · 10 tools")
                 provider_gap = rendered[rendered.index("THIRD_COMMENTARY"):rendered.index("AFTER_LONG_GAP")]
                 self.assertNotIn("⟡", provider_gap)
-                self.assertGreaterEqual(timing["long_gap"], 12)
-                self.assertLess(timing["final_gap"], 30)
+                self.assertRegex(provider_gap, r"(?m)^ 12s\s*$")
                 final_message = next(message for message in messages if any("FINAL_DONE" in row for row in message))
                 final_line = next(row for row in final_message if "══ Done" in row)
-                duration = re.search(r"^ ══ Done · (\d+)m(\d{2})s · 2 tools · 1 failed ═+$", final_line.rstrip())
-                self.assertIsNotNone(duration, final_line)
-                self.assertGreaterEqual(int(duration[1]) * 60 + int(duration[2]), 120)
+                self.assertRegex(final_line.rstrip(), r"^ ══ Done · 2m13s · 2 tools · 1 failed ═+$")
                 self.assertNotIn("⟡", final_line)
                 fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 48, 0, 0))
                 drain(0.3)
                 mobile = "\n".join(row for message in capture(48) for row in message)
                 self.assertIn(" ══ Done", mobile)
                 self.assertIn("1 failed", mobile)
-                self.assertRegex(mobile, r"(?m)^ 2m\d{2}s · ⟡")
+                self.assertRegex(mobile, r"(?m)^ 2m01s · ⟡ 2m01s")
                 self.assertIn("FINAL_DONE", mobile)
                 self.assertTrue(all(len(row) <= 48 for row in mobile.splitlines()))
                 fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 80, 0, 0))
@@ -302,8 +301,8 @@ export default function(pi) {
                 stop()
                 entries = [json.loads(line) for line in session_file.read_text().splitlines() if line.strip()]
                 self.assertEqual([entry for entry in entries if entry.get("customType") in grouping_types], legacy)
-                print(f"Real OMP: foreground wait -> {long_marker.strip()}; {timing['long_gap']:.1f}s provider wait excluded; "
-                      f"{timing['final_gap']:.1f}s final gap -> {final_line.strip()}")
+                print(f"Real OMP with grouping clock: 121s foreground wait -> {long_marker.strip()}; "
+                      f"12s provider gap excluded; 133s total -> {final_line.strip()}")
             finally:
                 stop()
 

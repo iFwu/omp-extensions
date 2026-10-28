@@ -7,8 +7,8 @@ import { TranscriptContainer } from "@oh-my-pi/pi-tui/chrome/transcript-containe
 import { renderGroupingLabel, type GroupingMarker } from "./render";
 import { GroupingState } from "./state";
 
-export default function (pi: ExtensionAPI) {
-  let state = new GroupingState();
+export default function (pi: ExtensionAPI, now?: () => number) {
+  let state = new GroupingState(now);
   let enabled = true;
   let tui: TUI | undefined;
   let context: ExtensionContext;
@@ -190,7 +190,7 @@ export default function (pi: ExtensionAPI) {
     pi.on(event as "session_start", (_event, ctx) => guard(() => {
       context = ctx;
       dispose?.();
-      state = new GroupingState();
+      state = new GroupingState(now);
       enabled = true;
       if (!ctx.hasUI) return;
       ctx.ui.setWidget("grouping-host", host => {

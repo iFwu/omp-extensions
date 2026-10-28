@@ -30,7 +30,7 @@
     },
     "packages/ask-history": {
       "name": "@ifwu/omp-ask-history",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-coding-agent": "18.12.6",
         "@oh-my-pi/pi-tui": "18.12.6",
@@ -42,7 +42,7 @@
     },
     "packages/composer": {
       "name": "@ifwu/omp-composer",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-coding-agent": "18.12.6",
         "@oh-my-pi/pi-tui": "18.12.6",
@@ -54,7 +54,7 @@
     },
     "packages/model-switch": {
       "name": "@ifwu/omp-model-switch",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-coding-agent": "18.12.6",
       },
@@ -64,7 +64,7 @@
     },
     "packages/next-step": {
       "name": "@ifwu/omp-next-step",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-ai": "18.12.6",
         "@oh-my-pi/pi-coding-agent": "18.12.6",
@@ -78,7 +78,7 @@
     },
     "packages/secret": {
       "name": "@ifwu/omp-secret",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-ai": "18.12.6",
         "@oh-my-pi/pi-coding-agent": "18.12.6",
@@ -96,7 +96,7 @@
     },
     "packages/skill-completion": {
       "name": "@ifwu/omp-skill-completion",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-coding-agent": "18.12.6",
         "@oh-my-pi/pi-tui": "18.12.6",
@@ -108,7 +108,7 @@
     },
     "packages/transcript-grouping": {
       "name": "@ifwu/omp-transcript-grouping",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "peerDependencies": {
         "@oh-my-pi/pi-ai": "18.12.6",
         "@oh-my-pi/pi-coding-agent": "18.12.6",
