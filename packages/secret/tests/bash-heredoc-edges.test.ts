@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { envVarName, expandBash, heredocRegions } from "../src/substitute.ts";
+import { envVarName } from "../src/refs.ts";
+import { expandBash, heredocRegions } from "../src/substitute/bash.ts";
 
 const resolve = (name: string): string | undefined => (name === "x" ? "SECRETVALUE" : undefined);
 const X = envVarName("x");

@@ -1,17 +1,8 @@
 import { createHash } from "node:crypto";
 
-/** Shared by injection and scrubbing so both agree on what a ref looks like. */
+/** Explicit reference syntax accepted by credential bash. */
 export const REF_RE = /\{\{sec:([a-z][a-z0-9_-]{0,63})\}\}/g;
 
-/**
- * The scrubber's reserved marker name (§12h). When masking has no known name to
- * use — shape matches and fail-closed fallbacks — it mints `{{sec:redacted}}`.
- * That name therefore means "this text came out of our scrubber", never "prose
- * quoting the syntax", and the write gate treats it accordingly: a non-resolving
- * ref with any other name is quoted syntax; one with THIS name is a masked value
- * on its way into a file and is refused.
- */
-export const RESERVED_NAME = "redacted";
 
 export interface Ref {
   raw: string;
@@ -32,12 +23,16 @@ export function findRefs(text: string): Ref[] {
   return refs;
 }
 export const MAX_REF_BYTES = 1024 * 1024;
-/** Guards against a 1-char value chewing up unrelated text. */
-export const MIN_SCRUBABLE_LENGTH = 8;
+/** Minimum length for exact-value output redaction. */
+export const MIN_CREDENTIAL_LENGTH = 8;
 
 export function validateCredential(value: string): void {
-  if (value.length < MIN_SCRUBABLE_LENGTH || value.includes("\u0000")) {
-    throw new Error("OMP secret input requires at least 8 characters and cannot contain NUL; shorter values cannot be safely redacted");
+  if (!value.trim()) throw new Error("secret value is empty");
+  if (value.length < MIN_CREDENTIAL_LENGTH || value.includes("\u0000")) {
+    throw new Error("secret input requires at least 8 characters and cannot contain NUL");
+  }
+  if (Buffer.byteLength(value, "utf8") > MAX_REF_BYTES) {
+    throw new Error("secret value is too large (>1MiB)");
   }
 }
 
@@ -50,25 +45,12 @@ export function parseRef(text: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
-/** 4 hex chars. Derived only from the full value, never from a prefix. */
-export function fingerprint(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 4);
-}
-
-/** Encodings a tool might echo back for the same underlying secret. */
-export function derivedForms(value: string): string[] {
-  const buf = Buffer.from(value, "utf8");
-  return [value, buf.toString("base64"), buf.toString("base64url"), buf.toString("hex")];
-}
 
 /**
  * The shell variable a secret is exported as.
  *
- * `name` is public - the transcript shows `sec:gh_pat` - so this digest is a
- * collision suppressor, not a secret, and it must resist a *targeted* second
- * preimage: Task 6 derives names from text an untrusted endpoint can steer, and an
- * attacker who knows a victim's name and can land a second name in the vault wants
- * both to resolve to one variable, delivering the wrong credential to a chosen host.
+ * The public name is hashed for shell-variable identity, never the credential value.
+ * Distinct names must not deliver the wrong credential through a shared variable.
  *
  * Two properties, in order of importance:
  *  - the sanitized body is NOT truncated, so names differing anywhere in their first

@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import type { ExtensionContext, ToolDefinition } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { createSecretTool } from "../src/tools/secret.ts";
-import { Vault } from "../src/vault.ts";
+import { Vault, setActiveScopeKey } from "../src/vault.ts";
 import { setEnabled } from "../src/state.ts";
+import { formatSecretList, registerCommands, runSecCommand } from "../src/commands.ts";
 
-beforeEach(() => setEnabled(true));
+beforeEach(() => {
+  setEnabled(true);
+  setActiveScopeKey(undefined);
+});
 
 const VALUE = "fake-for-tests-only-'\"$ space";
 
@@ -136,5 +140,143 @@ describe("on-demand session credentials", () => {
     const result = await invoke(createSecretTool(() => vault), request, context(async () => { throw new Error(VALUE); }));
     expect(result).toEqual({ status: "unavailable" });
     expect(vault.size()).toBe(0);
+  });
+
+  it("discards a pending value after clearing an empty vault", async () => {
+    const vault = new Vault("clear-pending");
+    const gate = Promise.withResolvers<{ value?: string }>();
+    const pending = invoke(createSecretTool(() => vault), request, context(() => gate.promise));
+    vault.clear();
+    gate.resolve({ value: VALUE });
+    expect(await pending).toEqual({ status: "cancelled" });
+    expect(vault.size()).toBe(0);
+  });
+
+  it("discards a pending value after an off/on cycle", async () => {
+    const vault = new Vault("toggle-pending");
+    const gate = Promise.withResolvers<{ value?: string }>();
+    const pending = invoke(createSecretTool(() => vault), request, context(() => gate.promise));
+    setEnabled(false);
+    setEnabled(true);
+    gate.resolve({ value: VALUE });
+    expect(await pending).toEqual({ status: "cancelled" });
+    expect(vault.size()).toBe(0);
+  });
+
+  it("discards a pending value after a session switch and switch back", async () => {
+    const vault = new Vault("first");
+    setActiveScopeKey("first");
+    const gate = Promise.withResolvers<{ value?: string }>();
+    const pending = invoke(createSecretTool(() => vault), request, context(() => gate.promise));
+    setActiveScopeKey("second");
+    setActiveScopeKey("first");
+    gate.resolve({ value: VALUE });
+    expect(await pending).toEqual({ status: "cancelled" });
+    expect(vault.size()).toBe(0);
+  });
+
+  it("cancels safely when the active session ends during input", async () => {
+    const vault = new Vault("ended");
+    let ended = false;
+    const tool = createSecretTool(() => {
+      if (ended) throw new Error(VALUE);
+      return vault;
+    });
+    const gate = Promise.withResolvers<{ value?: string }>();
+    const pending = invoke(tool, request, context(() => gate.promise));
+    ended = true;
+    gate.resolve({ value: VALUE });
+    expect(await pending).toEqual({ status: "cancelled" });
+    expect(vault.size()).toBe(0);
+  });
+});
+
+function commandContext(custom: () => Promise<{ value?: string }> = async () => ({}), hasUI = true) {
+  const messages: string[] = [];
+  const ctx = context(custom, hasUI) as ExtensionCommandContext;
+  ctx.ui.notify = (message) => { messages.push(message); };
+  return { ctx, messages };
+}
+
+describe("explicit /sec management", () => {
+  it("adds only masked input and lists references without value-derived metadata", async () => {
+    const vault = new Vault("command");
+    const { ctx, messages } = commandContext(async () => ({ value: VALUE }));
+    await runSecCommand("add api", vault, ctx);
+    expect(vault.resolve("api")).toBe(VALUE);
+    expect(messages).toEqual(["stored {{sec:api}} · this session only"]);
+    expect(formatSecretList(vault.entries())).toBe("{{sec:api}}");
+    await runSecCommand("list", vault, ctx);
+    expect(messages.at(-1)).toBe("{{sec:api}}");
+    expect(JSON.stringify(messages)).not.toContain(VALUE);
+  });
+
+  it("never accepts values in command arguments or invokes removed import/restore paths", async () => {
+    const vault = new Vault("arguments");
+    const { ctx, messages } = commandContext(async () => { throw new Error("unexpected dialog"); });
+    for (const input of [`add api ${VALUE}`, "add-from-file /tmp/fixture", "restore api", "add Invalid"]) {
+      await runSecCommand(input, vault, ctx);
+    }
+    expect(vault.size()).toBe(0);
+    expect(JSON.stringify(messages)).not.toContain(VALUE);
+  });
+
+  it("cancellation, headless mode and UI exceptions never store values", async () => {
+    const vault = new Vault("unavailable");
+    for (const { ctx, messages } of [commandContext(), commandContext(async () => ({ value: VALUE }), false),
+      commandContext(async () => { throw new Error(VALUE); })]) {
+      await runSecCommand("add api", vault, ctx);
+      expect(vault.size()).toBe(0);
+      expect(JSON.stringify(messages)).not.toContain(VALUE);
+    }
+  });
+
+  it("removes, renames, clears and disables without restoring old values", async () => {
+    const vault = new Vault("management");
+    const other = new Vault("other");
+    other.add("api", VALUE, "prompt");
+    const { ctx } = commandContext(async () => ({ value: VALUE }));
+    await runSecCommand("add api", vault, ctx);
+    await runSecCommand("rename api renamed", vault, ctx);
+    expect(vault.names()).toEqual(["renamed"]);
+    await runSecCommand("remove renamed", vault, ctx);
+    expect(vault.size()).toBe(0);
+    await runSecCommand("add api", vault, ctx);
+    await runSecCommand("clear", vault, ctx);
+    expect(vault.size()).toBe(0);
+    await runSecCommand("add api", vault, ctx);
+    await runSecCommand("off", vault, ctx);
+    expect(vault.size()).toBe(0);
+    await runSecCommand("add api", vault, ctx);
+    expect(vault.size()).toBe(0);
+    await runSecCommand("on", vault, ctx);
+    expect(vault.size()).toBe(0);
+    expect(other.resolve("api")).toBe(VALUE);
+  });
+
+  it("discards pending command input after clearing or switching sessions", async () => {
+    for (const change of ["clear", "switch"]) {
+      setActiveScopeKey(undefined);
+      const vault = new Vault(change);
+      const gate = Promise.withResolvers<{ value?: string }>();
+      const { ctx, messages } = commandContext(() => gate.promise);
+      const pending = runSecCommand("add api", vault, ctx);
+      if (change === "clear") vault.clear();
+      else setActiveScopeKey("different");
+      gate.resolve({ value: VALUE });
+      await pending;
+      expect(vault.size()).toBe(0);
+      expect(messages).toEqual(["cancelled — nothing was stored"]);
+    }
+  });
+
+  it("offers only explicit management subcommands in completion", () => {
+    let complete: ((prefix: string) => { value: string }[] | null) | undefined;
+    registerCommands({ registerCommand(_name: string, definition: { getArgumentCompletions: typeof complete }) {
+      complete = definition.getArgumentCompletions;
+    } } as unknown as ExtensionAPI);
+    expect(complete!("")?.map(item => item.value.trim())).toEqual(["add", "list", "remove", "rename", "clear", "off", "on"]);
+    expect(complete!("restore")).toBeNull();
+    expect(complete!("add-from-file")).toBeNull();
   });
 });

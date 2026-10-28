@@ -1,6 +1,6 @@
-export const PI_SECRET_PROMPT = "<pi_secret>Temporary credentials: read xd://secret, then invoke it via write for request/list. Never request credential text in chat. Use {{sec:NAME}} only in foreground bash, without PTY/async. Never print or recover values. Do not retry cancelled requests without user approval.</pi_secret>";
+export const SECRET_PROMPT = "<secret>When a requested operation needs a temporary credential, read xd://secret and invoke it via write with request/list. Request opens masked user input and returns only a session-local {{sec:NAME}} reference. Never ask for credential text in chat or arguments. Consume references only in foreground bash without PTY/async. Only explicitly entered values are redacted from that command's output; ordinary input and tool output are unchanged. Never print or recover values. Do not retry a cancelled request without user approval.</secret>";
 
-export function withPiSecretPrompt(systemPrompt: string[]): string[] {
-  if (systemPrompt.some(part => part.includes("<pi_secret>"))) return systemPrompt;
-  return [...systemPrompt, PI_SECRET_PROMPT];
+export function withSecretPrompt(systemPrompt: string[]): string[] {
+  if (systemPrompt.some(part => part.includes("<secret>"))) return systemPrompt;
+  return [...systemPrompt, SECRET_PROMPT];
 }

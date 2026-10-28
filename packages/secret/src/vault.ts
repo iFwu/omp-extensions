@@ -1,66 +1,17 @@
-import { MAX_REF_BYTES, envVarName, findEnvVarCollision, fingerprint, isValidName } from "./refs.ts";
-import { maskPreview } from "./preview.ts";
+import { envVarName, findEnvVarCollision, isValidName, validateCredential } from "./refs.ts";
 
-export type SecretTier = "session" | "ambient";
-/**
- * Where a value came from. `output` is a credential pi-secret found in a tool's OUTPUT and
- * stored itself so the model could keep using it as a ref (see ScrubOptions.adopt). It is
- * the one source nobody typed or approved, which is why it is told apart in every listing.
- */
-export type SecretSource = "prompt" | "paste" | "file" | "output";
-
-export interface VaultEntry {
-  name: string;
-  value: string;
-  addedAt: number;
-  tier: SecretTier;
-  source: SecretSource;
-  length: number;
-  fingerprint: string;
-  /**
-   * A truncated, value-DERIVED label (`ghp_A1b2…Q7R8`) or undefined when the value is too
-   * short for a preview to be safe. Computed once at insert time, so it travels with the
-   * entry instead of every consumer re-deriving it from the value.
-   *
-   * This is a deliberate weakening of "receipts and listings are value-free by
-   * construction": a few characters of a long secret now reach the transcript, which is
-   * what makes them recognisable to the person who pasted them. The length gate in
-   * src/preview.ts is what keeps that bounded, and short values keep the digest instead.
-   */
-  preview?: string;
-  /**
-   * Canonical paths of files this exact value was READ from (the `read` tool's raw output
-   * contained it). The one place a ref may be expanded into a `write`/`edit`: putting a value
-   * back into the file it came from puts nothing on disk that was not already there.
-   */
-  origins?: readonly string[];
-}
-
-/** Debug-safe projection: hasOwnProperty("value") must be false. */
+/** Public metadata never contains values or value-derived information. */
 export interface PublicEntry {
   name: string;
-  length: number;
-  fingerprint: string;
-  preview?: string;
   addedAt: number;
-  tier: SecretTier;
-  source: SecretSource;
 }
 
-interface InternalEntry extends Omit<VaultEntry, keyof PublicEntry> {
-  __piSecretSecret?: never;
+export interface VaultEntry extends PublicEntry {
+  value: string;
 }
 
 function toPublic(entry: VaultEntry): PublicEntry {
-  return {
-    name: entry.name,
-    length: entry.length,
-    fingerprint: entry.fingerprint,
-    preview: entry.preview,
-    addedAt: entry.addedAt,
-    tier: entry.tier,
-    source: entry.source,
-  };
+  return { name: entry.name, addedAt: entry.addedAt };
 }
 
 export class Vault {
@@ -70,6 +21,7 @@ export class Vault {
   // reach the values. A real private field is unreachable by either.
   #map = new Map<string, VaultEntry>();
   #toVar: (n: string) => string;
+  #generation = 0;
 
   // `toVar` is injectable so the collision guard's throw is testable: a genuine
   // 64-bit collision cannot be found in a test, and vi.mock cannot fake it either
@@ -79,27 +31,16 @@ export class Vault {
     this.#toVar = toVar;
   }
 
-  add(name: string, value: string, source: SecretSource): PublicEntry {
+  add(name: string, value: string, source: "prompt"): PublicEntry {
     if (!isValidName(name)) throw new Error(`invalid secret name: ${JSON.stringify(name)}`);
     // Two names must never share a shell variable, or a command asking for one
     // silently receives the other. Enforced at both name-entry points, add() and
     // rename(); expandBash can then assume distinctness.
     this.#assertNoCollision(name);
 
-    if (!value || !value.trim()) throw new Error(`secret ${name} is empty`);
-    if (Buffer.byteLength(value, "utf8") > MAX_REF_BYTES) {
-      throw new Error(`secret ${name} is too large (>1MiB) — this looks like a file, not a token`);
-    }
-    const entry: VaultEntry = {
-      name,
-      value,
-      addedAt: Date.now(),
-      tier: "session",
-      source,
-      length: value.length,
-      fingerprint: fingerprint(value),
-      preview: maskPreview(value),
-    };
+    if (source !== "prompt") throw new Error("secret values require explicit masked input");
+    validateCredential(value);
+    const entry: VaultEntry = { name, value, addedAt: Date.now() };
     this.#map.set(name, entry);
     // Projection, never the value-bearing entry: a failing toMatchObject on the
     // return would print the secret to CI.
@@ -122,14 +63,6 @@ export class Vault {
   }
   resolve(name: string): string | undefined {
     return this.#map.get(name)?.value;
-  }
-  addOrigin(name: string, path: string): void {
-    const entry = this.#map.get(name);
-    if (!entry || entry.origins?.includes(path)) return;
-    this.#map.set(name, { ...entry, origins: [...(entry.origins ?? []), path] });
-  }
-  hasOrigin(name: string, path: string): boolean {
-    return this.#map.get(name)?.origins?.includes(path) ?? false;
   }
   remove(name: string): boolean {
     return this.#map.delete(name);
@@ -160,9 +93,6 @@ export class Vault {
   values(): string[] {
     return [...this.#map.values()].map((e) => e.value);
   }
-  findByValue(value: string): VaultEntry | undefined {
-    return [...this.#map.values()].find((e) => e.value === value);
-  }
   entries(): PublicEntry[] {
     return [...this.#map.values()].map(toPublic);
   }
@@ -171,11 +101,16 @@ export class Vault {
   }
   clear(): number {
     const n = this.#map.size;
+    this.#generation++;
     this.#map.clear();
     return n;
   }
   scope(): string {
     return this.#scopeKey;
+  }
+  /** Changes when clearing the vault invalidates an outstanding input dialog. */
+  generation(): number {
+    return this.#generation;
   }
 
   /** Inspectable only from inside the module: keeps `value` off enumerable props. */
@@ -190,6 +125,7 @@ export class Vault {
 
 const REGISTRY = new Map<string, Vault>();
 let currentScope: string | undefined;
+let scopeGeneration = 0;
 
 export function vaultForSession(scopeKey: string): Vault {
   let vault = REGISTRY.get(scopeKey);
@@ -201,10 +137,14 @@ export function vaultForSession(scopeKey: string): Vault {
 }
 
 export function setActiveScopeKey(key: string | undefined): void {
+  if (key !== currentScope) scopeGeneration++;
   currentScope = key;
 }
 export function activeScopeKey(): string | undefined {
   return currentScope;
+}
+export function activeScopeGeneration(): number {
+  return scopeGeneration;
 }
 
 /**
@@ -218,7 +158,7 @@ export function activeScopeKey(): string | undefined {
  * as one. (ruling I3)
  */
 export function activeVault(): Vault {
-  if (currentScope === undefined) throw new Error("pi-secret: no session scope bound (activeVault called before session_start)");
+  if (currentScope === undefined) throw new Error("secret: no session scope bound (activeVault called before session_start)");
   return vaultForSession(currentScope);
 }
 
@@ -239,5 +179,3 @@ export function dropSessionVault(scopeKey: string): void {
 export function __vaultRegistryForTests(): Map<string, Vault> {
   return REGISTRY;
 }
-
-export type { InternalEntry };

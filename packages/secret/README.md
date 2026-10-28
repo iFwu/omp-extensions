@@ -1,8 +1,9 @@
 # Session secrets
 
-Opt-in, session-local credential input for OMP 18.12.6 on macOS and Linux. The
-model requests a masked dialog and receives a reference, not the credential value.
-This is accidental-disclosure protection, not an OS sandbox or credential broker.
+Opt-in, session-local credential input for OMP 18.12.6 on macOS and Linux. Only
+explicit `/sec add NAME` or a model `secret` request opens masked input and stores
+a credential. The model receives a reference, not the entered value. This is
+accidental-disclosure protection, not an OS sandbox or credential broker.
 
 ## Enable
 
@@ -53,15 +54,17 @@ schema exposure and should not be used to enable normal operation.
 
 ## Manual input and management
 
-- `/sec add NAME`: masked input; values require at least eight characters and no
-  NUL. Shorter values cannot be reliably scrubbed and are refused.
-- `/sec`: management menu; `/sec list`, `rename`, `remove`, `off`, `on` are also
-  available. `off` clears the session vault after confirmation.
-- `/sec add-from-file`: explicitly selected dotenv import, names shown for selection.
-- `/sec restore NAME`: user-requested copy to clipboard. This is not available to
-  the model as a reveal tool; the clipboard is outside the no-value-return boundary.
-- Tab completes `{{sec:NAME}}` references. OMP 18.12.6 does not support Pi's
-  automatic reference-trigger popup.
+- `/sec add NAME`: masked input; values require at least eight characters, no NUL,
+  and at most 1 MiB.
+- `/sec` or `/sec list`: list names/references and show management help.
+- `/sec rename OLD NEW`, `/sec remove NAME`, `/sec clear`: manage memory-only entries.
+- `/sec off` clears the session vault and disables credential entry/consumption;
+  `/sec on` enables it again within the loaded extension.
+- Tab completes `{{sec:NAME}}` references. No automatic reference-trigger popup.
+
+There is no file import, clipboard restore, plaintext-chat capture, or automatic
+credential detection. Ordinary passwords and token-looking strings entered into
+chat remain ordinary text, not protected secrets.
 
 Input is an inline TUI component, not a separate macOS window. The model-facing
 request never falls back to asking for a plaintext chat message.
@@ -84,10 +87,13 @@ Commands without references still delegate to native Bash. Credential commands
 use a new non-interactive shell: provide explicit `cwd`, combine dependent steps,
 and do not rely on variables/functions left in the native persistent shell.
 PTY, async jobs, named services and readiness gates are refused for credential
-commands. Other tool calls requiring secret substitution are refused before
-execution, rather than writing a reference string or persisting expanded arguments.
+commands. Other tools remain native: a reference in a file write is just literal
+text, not a substitution request, and file reads receive no secret filtering.
 
-Credential output is buffered in memory and redacted before OMP receives it.
+Credential-command output is buffered in memory. Only exact, explicitly entered
+credential values are replaced with references before OMP receives that output.
+Unrelated token-looking strings and encoded/transformed values are unchanged:
+there is no shape matching, substring guessing, or encoded-value redaction.
 There is no raw-output temp artifact. Output exceeding 8 MiB stops the process and
 withholds all output, avoiding a leaked prefix at a truncation boundary. Timeout
 and cancellation terminate the process group. Shell quoting guards reject contexts
@@ -98,27 +104,28 @@ the previous vault; reload/restart is not credential persistence. Re-enter value
 when references are unavailable. Session files retain references only for the
 verified secure-input/credential-command path.
 
-## Backstops and limits
+## Boundaries and limits
 
-The port retains upstream accidental-paste capture, known-value/shape scrubbing,
-file-output masking and provider-context hooks as defense in depth. Shape-only
-paste guesses ask for confirmation; they are not a substitute for masked input.
-`--sec-file-reads=false` and `--sec-confirm-guess=false` retain upstream explicit
-controls. A diagnostic failure does not bypass the scrubber's redacted fallback.
+There are no automatic capture/scanning hooks, history filters, transcript edits,
+context rewrites, or provider-payload transforms. Ordinary chat, tool arguments,
+native tool output, and stored conversation history are unchanged. Signed or
+encrypted provider history stays opaque; even a later explicit credential entry
+does not retroactively rewrite it. No extra flags enable the removed automatic
+scanning, file import, clipboard restore, or encoded-redaction behavior.
 
+- Enter credentials only through masked input. Pasting a credential into chat or
+  ordinary tools can send it to the provider and persist it unchanged.
 - Arbitrary same-user code can read process environments, transform credentials,
   write files or transmit them. This feature does not stop a malicious model.
-- Provider payload hooks are transport-dependent. OMP does not make every
-  transform-hook timeout/error universally fail-closed.
-- Native tools and other extensions can persist their own raw artifacts before
-  result hooks. Global scrubbing is not a guarantee for arbitrary existing files,
-  logs, screenshots, memory plugins or external tools.
+- Base64, URL encoding, hex, partial values, and other transformations are not
+  redacted. Exact-output replacement is not a data-loss-prevention system.
+- Existing files, native tool artifacts, logs, screenshots, memory plugins and
+  external tools are outside the explicit credential-command output boundary.
 - Images and binary payloads are not pixel-redacted. Never capture a screenshot
   showing a revealed value.
 - Explicit credential-file writes and the receiving service can retain values;
-  output masking does not undo those effects or securely erase process memory.
-- Clipboard and every management-menu path are not covered by the end-to-end
-  acceptance test. No real account credentials are used in tests.
+  output redaction does not undo those effects or securely erase process memory.
+- Tests use synthetic credentials and local providers only, never real accounts.
 
 ## Verification
 
@@ -132,14 +139,18 @@ python3 -m unittest discover -s packages/secret/tests -v
 bun run smoke:package
 ```
 
-The real PTY/provider fixture covers schema discovery, model-triggered masked
-input, reuse/listing, manual short/cancel, exact delivery of punctuation-bearing
-fake credentials to a loopback endpoint, echoed-output redaction, native shell
-persistence, foreground-only guards, unknown references, timeout, session clearing,
-and provider/terminal/runtime-file canary sweeps. Bun regressions cover input,
-request lifecycle, shell expansion, vault isolation, redaction and child-process
-cancellation/concurrency. Package smoke verifies default-off installation and
-persisted opt-in observed by a new OMP process.
+The real PTY/provider fixture covers schema discovery, manual and model-triggered
+masked input, reuse/listing, short-input rejection/cancellation, exact delivery of
+punctuation-bearing fake credentials to a loopback endpoint, and exact-only echoed
+output redaction. It also covers unchanged ordinary `confirm_password_ref`, CSS
+selectors, `password=` and token-shaped text in provider requests and persisted
+transcripts; native tools, literal non-Bash references, no automatic vault capture,
+encoded output, foreground-only guards, unknown references, timeout and session
+clearing. A separate local `openai-codex-responses` SSE regression checks opaque
+reasoning/signature persistence and encrypted history replay after explicit entry.
+Bun regressions cover input, request lifecycle, shell expansion, vault isolation,
+exact redaction and child-process cancellation/concurrency. Package smoke verifies
+default-off installation and persisted opt-in observed by a new OMP process.
 
 ## Attribution
 

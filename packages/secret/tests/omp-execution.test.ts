@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { mkdtempSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runSecretCommand } from "../src/tools/bash.ts";
-import { injectBashCommand } from "../src/glue.ts";
+import { runSecretCommand, injectBashCommand, registerSecureBash, redactCredentialOutput } from "../src/tools/bash.ts";
+import { setEnabled } from "../src/state.ts";
 import { Vault } from "../src/vault.ts";
 
 const cwd = process.cwd();
@@ -72,5 +73,64 @@ describe("OMP credential child processes", () => {
     const result = await runSecretCommand('yes fake-output', cwd, {}, 5);
     expect(result.output).toBe("");
     expect(result.stopped).toBe("output exceeded 8 MiB; output withheld");
+  });
+});
+
+function credentialTool(vault: Vault) {
+  let tool: ToolDefinition | undefined;
+  // The fixture provides only the registration surface exercised by the real tool.
+  const host = {
+    getAllTools: () => [{ name: "bash", sourceInfo: { source: "builtin" }, parameters: {}, description: "Bash" }],
+    registerTool: (value: ToolDefinition) => { tool = value; },
+  } as unknown as ExtensionAPI;
+  registerSecureBash(host, { vault: () => vault });
+  setEnabled(true);
+  if (!tool) throw new Error("Credential tool was not registered");
+  return tool;
+}
+
+// No UI or persistence is needed for this foreground child-process fixture.
+const executionContext = { cwd, agent: { kind: "main" } } as unknown as ExtensionContext;
+
+describe("explicit credential boundary", () => {
+  it("redacts exact values only, without interpreting token shapes or encoded forms", () => {
+    const value = "synthetic.p[a]ss+$";
+    const ordinary = "confirm_password_ref=css:input[name=confirm] sk-proj-NotAStoredCredential123456789";
+    const encoded = Buffer.from(value).toString("base64");
+    expect(redactCredentialOutput(`${ordinary}\n${value}\n${encoded}`, [value]))
+      .toBe(`${ordinary}\n[credential redacted]\n${encoded}`);
+  });
+
+  it("redacts overlapping values in one pass without altering surrounding bytes", () => {
+    expect(redactCredentialOutput("left abcdefgh-more / abcdefgh right", ["abcdefgh", "abcdefgh-more"]))
+      .toBe("left [credential redacted] / [credential redacted] right");
+  });
+
+  it("passes a credential to the child but returns only exact-value redaction", async () => {
+    const vault = new Vault("explicit-output");
+    vault.add("password", "synthetic password!", "prompt");
+    const tool = credentialTool(vault);
+    const result = await tool.execute("id", {
+      command: `printf '%s\\n' '{{sec:password}}' 'confirm_password_ref=css:input[name=confirm]' 'password=ordinary-text'`,
+    }, undefined, undefined, executionContext);
+    expect(result.content).toEqual([{ type: "text", text: "[credential redacted]\nconfirm_password_ref=css:input[name=confirm]\npassword=ordinary-text\n\nExit code: 0" }]);
+    expect(vault.names()).toEqual(["password"]);
+  });
+
+  it("keeps running-command output protected after the vault is cleared", async () => {
+    const vault = new Vault("clear-during-command");
+    vault.add("password", "synthetic-credential", "prompt");
+    const tool = credentialTool(vault);
+    const running = tool.execute("id", { command: `sleep 0.05; printf '%s' '{{sec:password}}'` }, undefined, undefined, executionContext);
+    vault.clear();
+    const result = await running;
+    expect(result.content).toEqual([{ type: "text", text: "[credential redacted]\nExit code: 0" }]);
+  });
+
+  it("refuses unresolved and undeliverable references instead of executing placeholders", () => {
+    const vault = new Vault("invalid-context");
+    vault.add("password", "synthetic-credential", "prompt");
+    expect(injectBashCommand("printf '%s' '{{sec:unknown}}'", vault).block).toBeDefined();
+    expect(injectBashCommand("cat <<'EOF'\n{{sec:password}}\nEOF", vault).block).toBeDefined();
   });
 });

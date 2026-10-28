@@ -1,12 +1,11 @@
 import type { ExtensionAPI, ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { bashRefIssues } from "../substitute/guard.ts";
 import { filterChildShellEnv } from "@oh-my-pi/pi-utils";
 import type { Vault } from "../vault.ts";
-import { injectBashCommand, scrubDeepFailClosed } from "../glue.ts";
-import { findRefs } from "../substitute.ts";
-import { scrubText } from "../scrub.ts";
+import { expandBash } from "../substitute/bash.ts";
+import { findRefs } from "../refs.ts";
 import { isEnabled } from "../state.ts";
 
 export interface SecureBashOptions {
@@ -14,6 +13,40 @@ export interface SecureBashOptions {
 }
 
 const MAX_OUTPUT = 8 * 1024 * 1024;
+
+export function injectBashCommand(command: string, vault: Vault) {
+  const issues = bashRefIssues(command, vault);
+  if (issues.length) return { command, env: {}, block: { reason: issues[0]!.problem } };
+  const out = expandBash(command, name => vault.resolve(name));
+  if (out.missing.length) {
+    return { command, env: {}, block: { reason: `Cannot expand sec:${out.missing.join(", ")} in this shell context.` } };
+  }
+  return { command: out.command, env: out.env };
+}
+
+export function redactCredentialOutput(output: string, values: readonly string[]): string {
+  const literals = [...new Set(values)].filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!literals.length) return output;
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < output.length) {
+    let start = -1;
+    let length = 0;
+    for (const value of literals) {
+      const next = output.indexOf(value, cursor);
+      if (next !== -1 && (start === -1 || next < start)) {
+        start = next;
+        length = value.length;
+      }
+    }
+    if (start === -1) break;
+    parts.push(output.slice(cursor, start), "[credential redacted]");
+    cursor = start + length;
+  }
+  if (!cursor) return output;
+  parts.push(output.slice(cursor));
+  return parts.join("");
+}
 
 export interface SecretCommandResult {
   output: string;
@@ -69,7 +102,7 @@ export async function runSecretCommand(
       if (stopped) killGroup("SIGKILL");
       signal?.removeEventListener("abort", abort);
     };
-    child.once("error", () => { cleanup(); reject(new Error("pi-secret: unable to start credential command")); });
+    child.once("error", () => { cleanup(); reject(new Error("secret: unable to start credential command")); });
     child.once("close", code => {
       cleanup();
       // Do not expose a prefix cut through a credential at an output-limit boundary.
@@ -78,10 +111,10 @@ export async function runSecretCommand(
   return promise;
 }
 
-export function registerSecureBash(pi: ExtensionAPI, _cwd: string, options: SecureBashOptions): void {
+export function registerSecureBash(pi: ExtensionAPI, options: SecureBashOptions): void {
   const native = pi.getAllTools().find(tool => tool.name === "bash");
   if (!native || native.sourceInfo.source !== "builtin") {
-    throw new Error("pi-secret requires the native OMP bash tool; another override is not supported");
+    throw new Error("secret requires the native OMP bash tool; another override is not supported");
   }
   pi.registerTool({
     name: "bash", label: "Bash", parameters: native.parameters,
@@ -90,30 +123,25 @@ export function registerSecureBash(pi: ExtensionAPI, _cwd: string, options: Secu
     async execute(_id, params, signal, onUpdate, ctx) {
       const input = params as Record<string, unknown>;
       const command = typeof input.command === "string" ? input.command : "";
-      const v = options.vault();
       const refs = findRefs(command);
       if (!refs.length) {
-        if (!ctx.invokeTool) throw new Error("pi-secret: native bash delegation unavailable");
-        const result = await ctx.invokeTool(input, {
-          signal,
-          onUpdate: onUpdate ? partial => {
-            // Suppress streaming while credentials exist: chunk boundaries can split a value.
-            if (v.size() === 0) onUpdate(partial);
-          } : undefined,
-        });
-        return scrubDeepFailClosed(result, v, { shapes: true }).value;
+        if (!ctx.invokeTool) throw new Error("secret: native bash delegation unavailable");
+        return ctx.invokeTool(input, { signal, onUpdate });
       }
       if (ctx.agent?.kind === "sub") throw new Error("Session credentials are available only to the main agent");
-      if (!isEnabled()) throw new Error("pi-secret is disabled; run /sec on and add the credential again");
+      if (!isEnabled()) throw new Error("secret is disabled; run /sec on and add the credential again");
       if (input.pty || input.async || input.name || input.ready) {
-        throw new Error("pi-secret: credential commands require foreground, non-PTY execution; omit pty/async/name/ready");
+        throw new Error("secret: credential commands require foreground, non-PTY execution; omit pty/async/name/ready");
       }
+      const v = options.vault();
       const expansion = injectBashCommand(command, v);
       if (expansion.block) throw new Error(expansion.block.reason);
       const cwd = typeof input.cwd === "string" ? resolve(ctx.cwd, input.cwd) : ctx.cwd;
       const timeout = typeof input.timeout === "number" ? input.timeout : 300;
+      // Snapshot before execution: clearing the vault while the child runs must not expose its output.
+      const values = v.values();
       const result = await runSecretCommand(expansion.command, cwd, expansion.env, timeout, signal);
-      const output = scrubText(result.output, v, { shapes: true }).text;
+      const output = redactCredentialOutput(result.output, values);
       const suffix = result.stopped ? `\nCredential command ${result.stopped}.` : `\nExit code: ${result.exitCode}`;
       return {
         content: [{ type: "text", text: output + suffix }],
@@ -122,9 +150,4 @@ export function registerSecureBash(pi: ExtensionAPI, _cwd: string, options: Secu
       };
     },
   } satisfies ToolDefinition);
-}
-
-export function bashIsOwnedByPiSecret(pi: ExtensionAPI): boolean {
-  const effective = pi.getAllTools().find(tool => tool.name === "bash");
-  return effective?.sourceInfo.path === fileURLToPath(new URL("../index.ts", import.meta.url));
 }

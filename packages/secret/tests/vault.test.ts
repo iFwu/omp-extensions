@@ -9,14 +9,12 @@ import {
   __vaultRegistryForTests,
 } from "../src/vault.ts";
 import {
-  derivedForms,
   envVarName,
-  fingerprint,
+  findRefs,
   isValidName,
   parseRef,
   refToken,
 } from "../src/refs.ts";
-import { findRefs } from "../src/substitute.ts";
 
 const K = "4f9c1a7e2b8d0a3c5e7f1b3d9a2c4e6f8b0d2a4c";
 const GH = "ghp_A1b2C3d4E5f6G7h8I9j0K1L2M3N4O5P6Q7R8";
@@ -49,20 +47,6 @@ describe("name and ref parsing", () => {
   });
 });
 
-describe("fingerprint and derived forms", () => {
-  it("fingerprint is 4 hex and depends only on the value", () => {
-    expect(fingerprint("a")).toMatch(/^[0-9a-f]{4}$/);
-    expect(fingerprint("abc")).toBe(fingerprint("abc"));
-    expect(fingerprint("abc")).not.toBe(fingerprint("abd"));
-  });
-
-  it("derived forms are the value plus base64/base64url/hex", () => {
-    const forms = derivedForms("abc");
-    expect(forms[0]).toBe("abc");
-    expect(forms).toContain(Buffer.from("abc").toString("base64"));
-    expect(forms).toContain("616263");
-  });
-});
 
 describe("Vault", () => {
   let v: Vault;
@@ -70,10 +54,9 @@ describe("Vault", () => {
     v = new Vault("s1");
   });
 
-  it("stores a value with provenance and derived metadata", () => {
+  it("stores explicit values with value-free metadata", () => {
     const e = v.add("gh_pat", GH, "prompt");
-    expect(e).toMatchObject({ name: "gh_pat", tier: "session", source: "prompt", length: GH.length });
-    expect(e.fingerprint).toBe(fingerprint(GH));
+    expect(e).toEqual({ name: "gh_pat", addedAt: expect.any(Number) });
     expect(v.get("gh_pat")?.value).toBe(GH);
     expect(v.resolve("gh_pat")).toBe(GH);
     expect(v.names()).toEqual(["gh_pat"]);
@@ -89,15 +72,14 @@ describe("Vault", () => {
 
   it("re-adding a name overwrites rather than duplicating", () => {
     v.add("k", K, "prompt");
-    v.add("k", GH, "paste");
+    v.add("k", GH, "prompt");
     expect(v.size()).toBe(1);
-    expect(v.get("k")).toMatchObject({ source: "paste", value: GH });
+    expect(v.get("k")).toMatchObject({ name: "k", value: GH });
   });
 
-  it("finds an existing name for the same value", () => {
-    v.add("a", GH, "prompt");
-    expect(v.findByValue(GH)?.name).toBe("a");
-    expect(v.findByValue("nope")).toBeUndefined();
+  it("rejects automatic capture sources at the storage boundary", () => {
+    expect(() => v.add("a", GH, "paste" as "prompt")).toThrow(/explicit masked input/);
+    expect(v.size()).toBe(0);
   });
 
   it("renames and removes", () => {
@@ -115,6 +97,7 @@ describe("Vault", () => {
     const safe = v.entries()[0]!;
     expect(JSON.stringify(v)).not.toContain(GH);
     expect(safe).not.toHaveProperty("value");
+    expect(safe).toEqual({ name: "gh_pat", addedAt: expect.any(Number) });
   });
 
   it("gives punctuation-variant and long-prefix names distinct variables", () => {
@@ -141,7 +124,7 @@ describe("Vault", () => {
     const flat = () => "__PISEC_FLAT_0000000000000000";
     const w = new Vault("t", flat);
     w.add("first", GH, "prompt");
-    expect(() => w.add("second", K, "paste")).toThrow(/collides with/);
+    expect(() => w.add("second", K, "prompt")).toThrow(/collides with/);
     expect(w.names()).toEqual(["first"]);
   });
 
@@ -153,7 +136,7 @@ describe("Vault", () => {
       n === "second" || n === "third" ? "__PISEC_FLAT_0000000000000000" : `__PISEC_${n.toUpperCase()}`;
     const w = new Vault("t", flat);
     w.add("first", GH, "prompt");
-    w.add("second", K, "paste");
+    w.add("second", K, "prompt");
     const real = new Vault("t");
     real.add("a-b", GH, "prompt");
     expect(() => w.rename("first", "third")).toThrow(/collides with/);
@@ -174,7 +157,7 @@ describe("Vault", () => {
       n === "second" || n === "third" ? "__PISEC_FLAT_0000000000000000" : `__PISEC_${n.toUpperCase()}`;
     const w = new Vault("t", flat);
     w.add("first", GH, "prompt");
-    w.add("second", K, "paste");
+    w.add("second", K, "prompt");
     expect(() => w.rename("second", "third")).not.toThrow();
     expect(w.names()).toEqual(["first", "third"]);
   });
@@ -191,7 +174,7 @@ describe("Vault", () => {
 
   it("accepts punctuation-variant names that really do differ", () => {
     v.add("a-b", GH, "prompt");
-    expect(() => v.add("a_b", K, "paste")).not.toThrow();
+    expect(() => v.add("a_b", K, "prompt")).not.toThrow();
     expect(v.names()).toEqual(["a-b", "a_b"]);
   });
 
@@ -208,9 +191,15 @@ describe("Vault", () => {
 
   it("clear() wipes values and reports how many", () => {
     v.add("a", GH, "prompt");
-    v.add("b", K, "paste");
+    v.add("b", K, "prompt");
     expect(v.clear()).toBe(2);
     expect(v.values()).toEqual([]);
+  });
+
+  it("rejects short and NUL-bearing values without storing them", () => {
+    expect(() => v.add("short", "1234", "prompt")).toThrow(/at least 8 characters/);
+    expect(() => v.add("nul", "synthetic\u0000value", "prompt")).toThrow(/NUL/);
+    expect(v.size()).toBe(0);
   });
 });
 

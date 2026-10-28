@@ -1,9 +1,9 @@
 import type { ToolDefinition } from "@oh-my-pi/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { promptMaskedSecret } from "../masked-input.ts";
-import { isValidName, validateCredential } from "../refs.ts";
-import { isEnabled } from "../state.ts";
-import type { Vault } from "../vault.ts";
+import { isValidName } from "../refs.ts";
+import { enabledGeneration, isEnabled } from "../state.ts";
+import { activeScopeGeneration, type Vault } from "../vault.ts";
 
 interface SecretReply {
   status: "listed" | "available" | "stored" | "cancelled" | "disabled" | "unavailable" | "busy" | "invalid";
@@ -20,7 +20,7 @@ export function createSecretTool(getVault: () => Vault): ToolDefinition {
   let requesting = false;
   return {
     name: "secret",
-    label: "Session credential",
+    label: "secret",
     description: "Request masked session-local credential input or list references; never returns values. Use {{sec:NAME}} in foreground bash only. Do not retry a cancelled request without user approval.",
     loadMode: "discoverable",
     approval: "read",
@@ -33,7 +33,12 @@ export function createSecretTool(getVault: () => Vault): ToolDefinition {
       const { action, name, reason } = params as { action: string; name?: string; reason?: string };
       if (ctx.agent?.kind === "sub") return reply({ status: "unavailable", error: "Session credentials are available only to the main agent." });
       if (!isEnabled()) return reply({ status: "disabled" });
-      const vault = getVault();
+      let vault: Vault;
+      try {
+        vault = getVault();
+      } catch {
+        return reply({ status: "unavailable", error: "No active session is available." });
+      }
       if (action === "list") return reply({ status: "listed", refs: vault.names().map(key => `{{sec:${key}}}`) });
       if (action !== "request" || !name || !isValidName(name) || !reason?.trim() || reason.length > 240 || /[\x00-\x1f\x7f]/.test(reason)) {
         return reply({ status: "invalid", error: "Request requires a valid name and a short, single-line reason." });
@@ -44,6 +49,9 @@ export function createSecretTool(getVault: () => Vault): ToolDefinition {
       if (!ctx.hasUI || ctx.mode !== "tui") return reply({ status: "unavailable", error: "An interactive OMP terminal is required; never supply the value in chat or arguments." });
       if (requesting) return reply({ status: "busy" });
       requesting = true;
+      const scope = activeScopeGeneration();
+      const enabled = enabledGeneration();
+      const generation = vault.generation();
       try {
         let value: string | undefined;
         try {
@@ -51,18 +59,23 @@ export function createSecretTool(getVault: () => Vault): ToolDefinition {
         } catch {
           return reply({ status: signal?.aborted ? "cancelled" : "unavailable" });
         }
-        if (value === undefined || signal?.aborted || !isEnabled() || getVault() !== vault) {
+        if (value === undefined || signal?.aborted || !isEnabled() || enabledGeneration() !== enabled ||
+            activeScopeGeneration() !== scope || vault.generation() !== generation) {
+          return reply({ status: "cancelled" });
+        }
+        try {
+          if (getVault() !== vault) return reply({ status: "cancelled" });
+        } catch {
           return reply({ status: "cancelled" });
         }
         if (vault.has(name)) return reply({ status: "available", ref });
         try {
-          validateCredential(value);
           vault.add(name, value, "prompt");
         } catch {
           return reply({ status: "invalid", error: "Credential not stored: use at least 8 characters, no NUL, and at most 1 MiB." });
         }
         try {
-          ctx.ui.setStatus("pi-secret", `sec: ${vault.size()} active`);
+          ctx.ui.setStatus("secret", `secret: ${vault.size()} active`);
         } catch {
           // Display failure does not undo a successful in-memory save.
         }

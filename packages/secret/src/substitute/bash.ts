@@ -1,4 +1,4 @@
-import { envVarName, findRefs, RESERVED_NAME, type SecretResolver } from "../refs.ts";
+import { envVarName, findRefs, type SecretResolver } from "../refs.ts";
 
 export interface BashExpansion {
   command: string;
@@ -444,12 +444,12 @@ function findArithSpans(text: string): { start: number; end: number }[] {
   return out;
 }
 
-/** Public single-pass scanner (Task 15 interface). */
+/** Scan shell quoting before inserting environment references. */
 export function scanBash(text: string): BashLex {
   return scan(text).lex;
 }
 
-/** Thin compatible wrapper: same shape as before, backed by the single pass. */
+/** Locate heredoc bodies and whether they permit parameter expansion. */
 export function heredocRegions(text: string): HeredocRegion[] {
   return scan(text).heredocs;
 }
@@ -462,17 +462,7 @@ export function expandBash(command: string, resolve: SecretResolver): BashExpans
   const bind = (name: string): string | undefined => {
     const value = resolve(name);
     if (value === undefined) {
-      // The reserved marker is exempt, and it is the ONLY exemption: no value is ever
-      // behind `{{sec:redacted}}` — it is the text pi-secret itself writes where it
-      // masked one — so reporting it as a name that could not be delivered refuses
-      // commands that merely quote the syntax. Measured 2026-10-10: two of my own tool
-      // calls were refused outright, both of them edits to this project's own tests.
-      //
-      // Every other unresolvable name is still reported, deliberately: after /resume the
-      // vault is a new session's, so a ref carried by the transcript is stale, and
-      // running `curl -H 'Bearer {{sec:gh_pat}}'` with a literal placeholder is the
-      // false-confidence failure this design treats as its worst case.
-      if (name !== RESERVED_NAME && !missing.includes(name)) missing.push(name);
+      if (!missing.includes(name)) missing.push(name);
       return undefined;
     }
     const varName = envVarName(name);
@@ -500,20 +490,7 @@ export function expandBash(command: string, resolve: SecretResolver): BashExpans
   const edits: Array<{ start: number; end: number; text: string }> = [];
 
   for (const ref of findRefs(command)) {
-    // §12h: a ref whose name stores nothing is SYNTAX BEING QUOTED — a commit
-    // message, a comment, documentation inside a heredoc. Nothing can be denied
-    // delivery because there is no value behind the name, so the fail-closed
-    // branches below do not apply to it: it passes through as the literal it
-    // already is.
-    //
-    // The scrubber's RESERVED_NAME is NOT excluded here, and that exclusion is what
-    // this line used to have. `{{sec:redacted}}` is never backed by a value — it is the
-    // text pi-secret itself writes where it masked one — so treating it as a value
-    // denied delivery refused any command that merely contained it, including edits to
-    // this project's own docs and tests. A masked value headed for a file is still
-    // reported, by the user-only redirect warning. The guard (bashRefIssues) filters the
-    // same case and the two must agree, or an allow here is undone by the caller's
-    // `missing` block.
+    // Unknown names in comments or quoted heredocs are literal documentation, not credentials.
     const prose = resolve(ref.name) === undefined;
     // A ref inside a comment is text bash DISCARDS — the command runs without it
     // ever being delivered. Expanding it would report the ref as `used` while

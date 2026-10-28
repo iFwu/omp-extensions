@@ -1,17 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  envVarName,
-  expandRefs,
-  findRefs,
-  quoteForPosix,
-  type Ref,
-} from "../src/substitute.ts";
-import { refToken } from "../src/refs.ts";
-
-const GH = "ghp_A1b2C3d4E5f6G7h8I9j0K1L2M3N4O5P6Q7R8";
-const DB = "postgres://admin:s3cr3t@db.internal:5432/app";
-const resolve = (name: string): string | undefined =>
-  name === "gh_pat" ? GH : name === "db_url" ? DB : undefined;
+import { envVarName, findRefs, refToken, type Ref } from "../src/refs.ts";
 
 describe("findRefs", () => {
   it("finds every ref with offsets, in order", () => {
@@ -28,9 +16,6 @@ describe("findRefs", () => {
   });
 
   it("finds the inner well-formed ref inside a malformed outer token", () => {
-    // REF_RE rescans past the malformed prefix, so the inner token matches.
-    // findRefs must report it: expandRefs (same regex) will replace it, and
-    // the two must agree on what a ref is.
     expect(findRefs("{{sec:{{sec:gh}}}}")).toEqual([
       { raw: "{{sec:gh}}", name: "gh", start: 6, end: 16 },
     ]);
@@ -41,26 +26,6 @@ describe("findRefs", () => {
   });
 });
 
-describe("expandRefs", () => {
-  it("replaces each ref and records what it used", () => {
-    const out = expandRefs(`-H "Authorization: Bearer ${refToken("gh_pat")}"`, resolve);
-    expect(out.text).toBe(`-H "Authorization: Bearer ${GH}"`);
-    expect(out.used).toEqual(["gh_pat"]);
-    expect(out.missing).toEqual([]);
-  });
-
-  it("leaves missing refs in place and reports them", () => {
-    const out = expandRefs(`${refToken("gh_pat")} ${refToken("nope")}`, resolve);
-    expect(out.text).toBe(`${GH} ${refToken("nope")}`);
-    expect(out.used).toEqual(["gh_pat"]);
-    expect(out.missing).toEqual(["nope"]);
-  });
-
-  it("is idempotent on already-expanded text", () => {
-    const once = expandRefs(refToken("gh_pat"), resolve).text;
-    expect(expandRefs(once, resolve).text).toBe(once);
-  });
-});
 
 describe("envVarName", () => {
   it("maps a secret name to a distinct shell identifier", () => {
@@ -90,29 +55,5 @@ describe("envVarName", () => {
     const name = "a".repeat(64);
     expect(envVarName(name)).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
     expect(envVarName(name).length).toBeLessThanOrEqual(89);
-  });
-});
-
-describe("quoteForPosix", () => {
-  it("wraps ordinary values in single quotes", () => {
-    expect(quoteForPosix(GH)).toBe(`'${GH}'`);
-  });
-
-  it("escapes embedded single quotes", () => {
-    // Canonical ANSI quoting: each ' becomes '\'' (close, escaped, reopen).
-    // Both outputs round-trip through /bin/sh; the raw literals without the
-    // doubled quote are unterminated shell strings.
-    expect(quoteForPosix("it's")).toBe(`'it'\\''s'`);
-    expect(quoteForPosix("'")).toBe(`''\\'''`);
-  });
-
-  it("round-trips through the shell", async () => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const run = promisify(execFile);
-    for (const value of ["plain", "with space", "it's", '$(echo pwned)', "new\nline", "a;b c|d"]) {
-      const { stdout } = await run("/bin/sh", ["-c", `printf %s ${quoteForPosix(value)}`]);
-      expect(stdout).toBe(value);
-    }
   });
 });

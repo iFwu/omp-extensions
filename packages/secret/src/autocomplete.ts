@@ -1,19 +1,7 @@
 import type { AutocompleteItem, AutocompleteProvider } from "@oh-my-pi/pi-tui";
 import type { Vault } from "./vault.ts";
 
-/**
- * `{{sec:NAME}}` completion in the editor — the human-facing half of spec §5's discovery
- * story. The `/sec` verbs already complete through the command's own
- * `getArgumentCompletions`; this covers the ref syntax the model uses and the user
- * types by hand.
- *
- * Value-free by construction, like the secret tool: items are built from the vault's
- * PublicEntry projection, which has no value field to interpolate. That matters more here
- * than anywhere else in the extension, because this is the one surface that writes text
- * back into the editor — a place a careless `entry.value` would put the secret into the
- * user's input line, and from there into the transcript. (The same reason
- * `ctx.ui.setEditorText()` is absent from the restore seam.)
- */
+/** Completes explicit references from public names; delegates all ordinary editor input. */
 const PREFIX = "{{sec:";
 
 /** The partially-typed ref immediately before the cursor, or null. */
@@ -58,7 +46,7 @@ export function createSecAutocompleteProvider(
         .map((e) => ({
           value: e.name,
           label: e.name,
-          description: `${e.preview ?? `sha256:${e.fingerprint}`} · len ${e.length}`,
+          description: "Session secret reference",
         }));
       return items.length ? { items, prefix: match.prefix } : null;
     },
