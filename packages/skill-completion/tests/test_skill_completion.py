@@ -30,8 +30,14 @@ class SkillCompletionTests(unittest.TestCase):
                 pass
 
             def do_POST(self):
-                requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-                text = f"SKILL_REPLY_{len(requests)}"
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if body["model"] == "skill-summary":
+                    text = "Use for fixture selection."
+                else:
+                    if body["model"] != "fixture":
+                        raise ValueError(f"Unexpected fixture model: {body['model']}")
+                    requests.append(body)
+                    text = f"SKILL_REPLY_{len(requests)}"
                 item = {"type": "message", "id": "msg", "role": "assistant", "status": "completed",
                         "content": [{"type": "output_text", "text": text, "annotations": []}]}
                 response = {"id": "resp", "object": "response", "status": "completed", "output": [item],
@@ -101,10 +107,13 @@ export default function(pi) {
             write_yaml(root / "models.yml", {"providers": {"skills-test": {
                 "baseUrl": f"http://127.0.0.1:{server.server_port}/v1", "api": "openai-responses",
                 "auth": "apiKey", "apiKey": "test-only", "models": [{"id": "fixture", "name": "Skill Fixture",
-                "reasoning": False, "input": ["text"], "contextWindow": 100000, "maxTokens": 1024}],
+                "reasoning": False, "input": ["text"], "contextWindow": 100000, "maxTokens": 1024},
+                {"id": "skill-summary", "name": "Skill Summary Fixture", "reasoning": False,
+                 "input": ["text"], "contextWindow": 100000, "maxTokens": 1024}],
             }}})
             write_yaml(root / "config.yml", {
                 "startup": {"setupWizard": False, "checkUpdate": False, "quiet": True},
+                "modelRoles": {"smol": "skills-test/skill-summary"},
                 "providers": {"cacheWarming": "off"}, "retry": {"enabled": False, "modelFallback": False},
                 "compaction": {"enabled": False}, "completion": {"notify": "off"},
                 "skills": {"enableSkillCommands": True, "includeSkills": ["fixture-*"]}, "spelling": {"enabled": False},

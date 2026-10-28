@@ -91,6 +91,8 @@ Use `{{sec:name}}` references only with foreground Bash. Reference-bearing comma
 
 Prerequisites: the official OMP **18.12.6 standalone binary**, Bun **1.4.4**, Python **3.12**, uv, and npm (for inspecting the packed distribution).
 
+The 0.5.3 extension payload also passes the real TUI/RPC, cross-feature, and packed-install checks on the [iFwu OMP 18.13.3-ifwu.1 standalone build](https://github.com/iFwu/oh-my-pi/releases/tag/v18.13.3-ifwu.1). The development SDK remains pinned to 18.12.6; select a candidate host with `OMP_BIN`. Skill-completion fixtures give background skill-description compression its own `smol` model so the foreground request-count assertions still detect duplicate submissions.
+
 ```sh
 uv venv .venv
 uv pip install --python .venv/bin/python pyte==0.8.2 PyYAML==6.0.3 pexpect==4.9.0
