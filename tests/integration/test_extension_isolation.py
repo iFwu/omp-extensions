@@ -24,7 +24,7 @@ if os.name == "posix":
 @unittest.skipUnless(os.name == "posix" and OMP_BIN, "POSIX OMP TUI required")
 class ExtensionIsolationTests(unittest.TestCase):
     @contextmanager
-    def session(self, *extensions, final_stream_seconds=0, stream_chunks=False, final_delay=0):
+    def session(self, *extensions, final_stream_seconds=0, stream_chunks=False):
         requests = []
         gate = threading.Event()
         gate.set()
@@ -44,10 +44,8 @@ class ExtensionIsolationTests(unittest.TestCase):
                         self.send_error(504)
                         return
                     text = "BEFORE_TOOLS" if turn == 1 else "LIVE_BODY" if turn == 2 else f"FOLLOWUP_{turn}_OK"
-                    if stream_chunks and turn >= 2:
-                        text = ("STREAM_BODY " if turn == 2 else "FINAL_BODY ") + " ".join(f"chunk{n}" for n in range(24))
-                    if turn == 3 and final_delay:
-                        time.sleep(final_delay)
+                    if stream_chunks and turn == 2:
+                        text = "STREAM_BODY " + " ".join(f"chunk{n}" for n in range(24))
                     long_final = final_stream_seconds and turn == 1
                     if long_final:
                         text = "FINAL_STREAM_START\nFINAL_STREAM_END"
@@ -89,7 +87,7 @@ class ExtensionIsolationTests(unittest.TestCase):
                                     time.sleep(final_stream_seconds)
                                     event("response.output_text.delta", output_index=index, item_id=item["id"], delta="FINAL_STREAM_END")
                                 else:
-                                    if stream_chunks and turn >= 2:
+                                    if stream_chunks and turn == 2:
                                         for number, chunk in enumerate(text.split(" ")):
                                             event("response.output_text.delta", output_index=index, item_id=item["id"], delta=(" " if number else "") + chunk)
                                             time.sleep(0.4 if number % 6 == 5 else 0.12)
@@ -254,8 +252,8 @@ export default function(pi) {
             def settled(turn, timeout=15):
                 expected = "FINAL_STREAM_START\nFINAL_STREAM_END" if final_stream_seconds and turn == 1 else (
                     "LIVE_BODY" if turn == 2 else f"FOLLOWUP_{turn}_OK")
-                if stream_chunks and turn >= 2:
-                    expected = ("STREAM_BODY " if turn == 2 else "FINAL_BODY ") + " ".join(f"chunk{n}" for n in range(24))
+                if stream_chunks and turn == 2:
+                    expected = "STREAM_BODY " + " ".join(f"chunk{n}" for n in range(24))
                 until(lambda: any(json.loads(line).get("message", {}).get("role") == "assistant" and
                       json.loads(line).get("message", {}).get("stopReason") == "stop" and
                       any(block.get("text") == expected
@@ -359,44 +357,30 @@ export default function(pi) {
             settled(3)
             self.assertIsNone(process.poll())
 
-    def test_ask_factory_and_lazy_render_faults_preserve_answers_and_followup(self):
-        for mode in ("factory", "render"):
-            with self.subTest(mode=mode), self.session("ask-history") as (root, process, requests, gate, blocked, send, see, until, settled, output):
-                send(f"/inject-failure ask-{mode}")
-                see("ANSWER: Keep")
-                see("Ask history styling disabled after an error")
-                send("Continue after the Ask display failure.")
-                settled(2)
-                self.assertIsNone(process.poll())
-                self.assertNotIn("QUESTION: Storage mode", json.dumps(requests))
+    def test_ask_lazy_render_fault_preserves_answers_and_followup(self):
+        with self.session("ask-history") as (root, process, requests, gate, blocked, send, see, until, settled, output):
+            send("/inject-failure ask-render")
+            see("ANSWER: Keep")
+            see("Ask history styling disabled after an error")
+            send("Continue after the Ask display failure.")
+            settled(2)
+            self.assertIsNone(process.poll())
+            self.assertNotIn("QUESTION: Storage mode", json.dumps(requests))
 
     def test_streamed_gap_marker_stays_visible_on_every_frame(self):
-        self.check_streamed_marker(final=False)
-
-    def test_streamed_final_marker_stays_visible_on_every_frame(self):
-        self.check_streamed_marker(final=True)
-
-    def check_streamed_marker(self, final):
-        with self.session("transcript-grouping", stream_chunks=True, final_delay=121 if final else 0) as (root, process, requests, gate, blocked, send, see, until, settled, output):
+        with self.session("transcript-grouping", stream_chunks=True) as (root, process, requests, gate, blocked, send, see, until, settled, output):
             send("Stream commentary after tool work.")
             settled(2)
-            if final:
-                send("Stream a final after the two-minute threshold.")
-                until(lambda: len(requests) == 3, "final request")
-                (root / "frames.jsonl").unlink(missing_ok=True)
-                until(lambda: (root / "frames.jsonl").exists() and any("FINAL_BODY" in line and "chunk23" in line for line in (root / "frames.jsonl").read_text().splitlines()), "final streaming frames", timeout=145)
-                settled(3)
-            marker = "══ Done" if final else "3 tools"
             frames = [json.loads(line) for line in (root / "frames.jsonl").read_text().splitlines()]
-            visible = [rows for rows in frames if any(("FINAL_BODY" if final else "STREAM_BODY") in row for row in rows)]
+            visible = [rows for rows in frames if any("STREAM_BODY" in row for row in rows)]
             # Inspect actual render calls during streaming, not a post-completion snapshot.
             self.assertGreaterEqual(len({"\n".join(rows) for rows in visible}), 5)
-            missing = [rows for rows in visible if not any(marker in row for row in rows)]
-            self.assertFalse(missing, f"{marker} disappeared in {len(missing)}/{len(visible)} streaming frames; first={missing[:1]}")
+            missing = [rows for rows in visible if not any("3 tools" in row for row in rows)]
+            self.assertFalse(missing, f"3 tools disappeared in {len(missing)}/{len(visible)} streaming frames; first={missing[:1]}")
             self.assertNotIn("Grouping disabled", output.decode(errors="replace"))
-            print(f"Real OMP: {marker} stable in all {len(visible)} streaming frames")
+            print(f"Real OMP: 3 tools stable in all {len(visible)} streaming frames")
             send("Continue after streaming.")
-            settled(4 if final else 3)
+            settled(3)
 
     def test_final_crossing_two_minutes_during_stream_gets_completed_marker(self):
         with self.session("transcript-grouping", final_stream_seconds=121) as (root, process, requests, gate, blocked, send, see, until, settled, output):

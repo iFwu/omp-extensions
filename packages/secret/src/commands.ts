@@ -16,12 +16,7 @@ export function registerCommands(pi: ExtensionAPI): void {
       return items.length ? items : null;
     },
     handler: async (args, ctx) => {
-      const vault = activeVault();
-      const scope = activeScopeGeneration();
-      await runSecCommand(args ?? "", vault, ctx);
-      if (ctx.hasUI && activeScopeGeneration() === scope) {
-        ctx.ui.setStatus("secret", isEnabled() ? `secret: ${vault.size()} active` : "secret: off");
-      }
+      await runSecCommand(args ?? "", activeVault(), ctx);
     },
   });
 }

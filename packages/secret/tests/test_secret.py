@@ -184,7 +184,9 @@ class NativeSession:
         self.screen = pyte.Screen(130, 42)
         self.output_tail = ""
         self.stream = pyte.Stream(self.screen)
-        self.wait(lambda: "sec: 0 active" in self.visible(), "extension startup", timeout=40)
+        self.wait(lambda: "fixture" in self.visible().lower(), "native editor startup", timeout=40)
+        self.send("/sec list")
+        self.wait(lambda: "no secrets in this session" in self.visible(), "explicit credential listing")
         testcase.assertNotIn("another extension owns", self.visible())
 
     def visible(self):
@@ -202,6 +204,8 @@ class NativeSession:
         self.terminal_leaked |= any(value in combined for value in self.forbidden)
         self.carry = combined[-max(map(len, self.forbidden)):]
         self.stream.feed(data)
+        self.testcase.assertNotRegex(self.visible(), r"(?:sec|secret): \d+ active|secret: off",
+                                     "credentials must not add a persistent status badge")
 
     def pump(self, duration=0.15):
         deadline = time.monotonic() + duration
@@ -422,7 +426,8 @@ class SecretRuntimeTests(unittest.TestCase):
 
         with self.subTest("new session clears vault"):
             session.send("/new")
-            session.wait(lambda: "sec: 0 active" in session.visible(), "new session vault reset")
+            session.wait(lambda: "fixture" in session.visible().lower()
+                         and f"SECRET_DONE_{len(server.tool_results)}" not in session.visible(), "new session editor")
             self.assertNotIn("sec:canary", session.secret({"action": "list"}))
             result = session.turn("bash", {"i": "Checking cleared reference", "command": 'printf "%s" "{{sec:canary}}"', "timeout": 5})
             self.assertTrue("not found" in result or "unknown" in result)

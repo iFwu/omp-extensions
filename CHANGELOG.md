@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Remove persistent secret status badges at startup, after credential input, and after management commands. Use `/sec list` on demand; credential entry and execution are unchanged.
+- Split Linux/macOS verification into independent workspace, integration, and typecheck/package-smoke slices. Full CI runs asynchronously without blocking publication after affected local tests and smoke pass; failures remain visible and superseded runs are cancelled.
+- Add targeted package smoke selection with `--workspace`. Remove the redundant 121-second delayed-final streaming case, duplicate standalone Ask factory-failure case, and incidental ultra-wide/long-prose display checks. Retain real-TUI threshold-crossing, gap-streaming, failure-isolation, normal/narrow rendering, and credential safety coverage.
+
 ## 0.5.0
 
 - Allow next-step generation up to 60 seconds for long-tail provider latency while preserving immediate input cancellation and one extension request per completed turn.

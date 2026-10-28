@@ -11,7 +11,7 @@ This package targets **OMP 18.12.6**; development and CI use Bun **1.4.4**. OMP 
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.5.0
+omp plugin install github:iFwu/omp-extensions#v0.5.1
 omp plugin doctor
 ```
 
@@ -58,8 +58,8 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.5.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.5.0
-omp plugin install ./omp-extensions-v0.5.0/packages/skill-completion
+git clone --branch v0.5.1 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.5.1
+omp plugin install ./omp-extensions-v0.5.1/packages/skill-completion
 omp plugin doctor
 ```
 
@@ -67,16 +67,16 @@ OMP keeps a local link to that package directory: retain the checkout and keep i
 
 ### Session-secret opt-in
 
-Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.5.0` checkout created above:
+Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.5.1` checkout created above:
 
 ```sh
 # Suite
-omp plugin install github:iFwu/omp-extensions#v0.5.0
+omp plugin install github:iFwu/omp-extensions#v0.5.1
 omp plugin config set @ifwu/omp-extensions secret true
 omp plugin config get @ifwu/omp-extensions secret --json
 
 # Alternatively, standalone (do not install alongside the suite)
-omp plugin install ./omp-extensions-v0.5.0/packages/secret
+omp plugin install ./omp-extensions-v0.5.1/packages/secret
 omp plugin config set @ifwu/omp-secret enabled true
 omp plugin config get @ifwu/omp-secret enabled --json
 ```
@@ -98,9 +98,12 @@ source .venv/bin/activate
 bun install --frozen-lockfile
 export OMP_BIN="$(command -v omp)" # point directly to the standalone binary, not a session wrapper
 bun run typecheck
-bun run test
-bun run smoke:package
+# Example: verify a secret-only change locally before publishing.
+bun run --filter @ifwu/omp-secret test
+bun run smoke:package --workspace secret
 ```
+
+Run each affected workspace's existing test script with `bun run --filter @ifwu/omp-<feature> test`. Add `bun run test:integration` when cross-feature lifecycle, shared fixtures, or registration behavior changes. Repeat `--workspace` to smoke multiple changed standalone packages; the root suite is always included. For dependency, packaging, or changes spanning the suite, run `bun run test:workspaces`, `bun run test:integration`, and `bun run smoke:package` without a selector. `bun run test` remains the complete local workspace-plus-integration suite. Local checks must cover the affected behavior and relevant package payload before publishing; a workflow-only change needs workflow syntax/command-contract validation and relevant smoke, not a local rerun of every runtime scenario.
 
 The tests exercise real OMP processes against loopback HTTP fixtures, including real TUI behavior. Some intentionally cross the 120-second tool/stream boundary: allow several minutes and do not shorten those waits into superficial tests. Bun-only tests cover rendering/state logic separately. A missing runtime can cause unittest skips, so check the skip summary rather than treating a green exit as evidence that TUI tests ran.
 
@@ -108,7 +111,7 @@ The package smoke checks and installs the root tarball and every standalone work
 
 For Git transport verification, run `python3 scripts/smoke-package.py --git-source github:iFwu/omp-extensions#<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes.
 
-GitHub Actions runs the same checks for pull requests and `main` pushes on Linux and macOS, downloads official release binaries, and checks them against that release's `SHA256SUMS.txt`. Release tags point to commits that already passed this matrix, rather than duplicating it on tag pushes. Required checks use no model credentials and make no live-model calls. They validate integration and deterministic behavior, **not real-model response quality**.
+GitHub Actions runs the complete suite asynchronously for pull requests, `main` pushes, and manual dispatches on Linux and macOS. Independent matrix slices run each workspace's tests, cross-feature integration, and typecheck/package smoke; typechecking and package smoke run once per OS, not in every workspace slice. Official release binaries are checked against that release's `SHA256SUMS.txt`. Full CI is **not a prerequisite for tagging or publishing** after the affected local checks pass, and tag pushes do not duplicate the matrix. A failing slice stays failed and does not cancel the other slices; failures are neither silently retried nor suppressed. Superseded runs of the same event/ref are cancelled to avoid redundant work. Review asynchronous failures and report them for investigation rather than treating a release as proof that the full suite passed. These checks use no model credentials and make no live-model calls; they validate integration and deterministic behavior, **not real-model response quality**.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
 
@@ -133,7 +136,7 @@ Feature implementation and its tests live in `packages/<feature>/src` and `packa
 
 Composer separates input rendering, queue decoration, and activity timing. Grouping owns its state and label renderer. Small single-purpose extensions stay in one implementation file; no shared runtime framework or cross-package source imports are required.
 
-Keep the root and all workspace versions aligned, commit the single `bun.lock`, and publish one repository-wide tag only after the complete matrix passes. The root tarball contains the feature sources directly, without workspace dependency links or a separate build step. Independent npm publication is a separate distribution action, not implied by the workspace layout.
+Keep the root and all workspace versions aligned, commit the single `bun.lock`, and publish one repository-wide tag at the exact commit whose affected local tests, typecheck, and relevant package smoke passed. Push that commit to `main` so the full Linux/macOS matrix runs asynchronously; do not wait for its completion before tagging or publishing. Keep CI failures visible for investigation. The root tarball contains the feature sources directly, without workspace dependency links or a separate build step. Independent npm publication is a separate distribution action, not implied by the workspace layout.
 
 
 ## Contributing

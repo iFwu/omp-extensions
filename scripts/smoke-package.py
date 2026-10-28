@@ -184,12 +184,16 @@ def smoke_package(package_directory, install_source=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--git-source", help="Smoke only the suite using an exact Git ref matching this checkout")
+    workspaces = {manifest.parent.name: manifest.parent for manifest in sorted(REPO.glob("packages/*/package.json"))}
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--git-source", help="Smoke only the suite using an exact Git ref matching this checkout")
+    selection.add_argument("--workspace", action="append", choices=workspaces,
+                           help="Smoke the suite and this standalone workspace; repeat for multiple (default: all)")
     args = parser.parse_args()
     smoke_package(REPO, args.git_source)
     if not args.git_source:
-        for manifest in sorted(REPO.glob("packages/*/package.json")):
-            smoke_package(manifest.parent)
+        for name in dict.fromkeys(args.workspace or workspaces):
+            smoke_package(workspaces[name])
 
 
 if __name__ == "__main__":

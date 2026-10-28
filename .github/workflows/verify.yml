@@ -9,12 +9,36 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
+    name: ${{ matrix.slice.name }} (${{ matrix.os }})
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        slice:
+          - name: composer
+            command: bun run --filter @ifwu/omp-composer test
+          - name: transcript-grouping
+            command: bun run --filter @ifwu/omp-transcript-grouping test
+          - name: ask-history
+            command: bun run --filter @ifwu/omp-ask-history test
+          - name: skill-completion
+            command: bun run --filter @ifwu/omp-skill-completion test
+          - name: model-switch
+            command: bun run --filter @ifwu/omp-model-switch test
+          - name: next-step
+            command: bun run --filter @ifwu/omp-next-step test
+          - name: secret
+            command: bun run --filter @ifwu/omp-secret test
+          - name: integration
+            command: bun run test:integration
+          - name: package
+            command: bun run typecheck && bun run smoke:package
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
@@ -62,9 +86,5 @@ jobs:
         run: |
           bun install --frozen-lockfile
           python3 -m pip install pyte==0.8.2 PyYAML==6.0.3 pexpect==4.9.0
-      - name: Typecheck
-        run: bun run typecheck
-      - name: Run all offline fixture tests
-        run: bun run test
-      - name: Pack, install, doctor, and load smoke
-        run: bun run smoke:package
+      - name: Run ${{ matrix.slice.name }} checks
+        run: ${{ matrix.slice.command }}

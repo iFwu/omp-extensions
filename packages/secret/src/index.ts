@@ -35,7 +35,6 @@ export default function secretExtension(pi: ExtensionAPI): void {
     registerCommands(pi);
     if (ctx.hasUI) {
       ctx.ui.addAutocompleteProvider(current => createSecAutocompleteProvider(activeVault, current));
-      ctx.ui.setStatus("secret", `sec: ${activeVault().size()} active`);
     }
   });
 
@@ -44,7 +43,6 @@ export default function secretExtension(pi: ExtensionAPI): void {
     dropSessionVault(activeScopeKey()!);
     setActiveScopeKey(sessionScope(ctx));
     setEnabled(true);
-    if (ctx.hasUI) ctx.ui.setStatus("secret", "sec: 0 active");
   };
   pi.on("session_switch", resetSession);
   pi.on("session_branch", resetSession);
@@ -54,7 +52,6 @@ export default function secretExtension(pi: ExtensionAPI): void {
     if (previous) dropSessionVault(previous);
     setActiveScopeKey(undefined);
     setEnabled(false);
-    if (ctx.hasUI) ctx.ui.setStatus("secret", undefined);
   });
   pi.on("before_agent_start", async (event, ctx) => {
     if (!activeScopeKey() || !isEnabled() || ctx.agent.kind !== "main") return;

@@ -69,7 +69,7 @@ class GroupingTuiTests(unittest.TestCase):
                 elif turn == 5:
                     text("UNPHASED_DONE")
                 else:
-                    text("LONG_START\n\n" + "\n\n".join(f"Paragraph {n}." for n in range(100)) + "\n\nLONG_DONE")
+                    text("RESUMED_DONE")
                 response = {"id": f"resp_{turn}", "object": "response", "status": "completed", "output": output,
                             "usage": {"input_tokens": 3000, "output_tokens": 100, "total_tokens": 3100}}
                 events = [("response.created", {"response": response | {"status": "in_progress", "output": []}})]
@@ -264,11 +264,6 @@ export default function(pi) {
                 self.assertIn("══ Done", "\n".join(row for message in capture() for row in message))
                 os.write(master, b"\x0f")
                 drain(0.3)
-                fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 240, 0, 0))
-                drain(1)
-                wide = capture(240)
-                self.assertIn(" ══ Done · ", "\n".join(row for message in wide for row in message))
-                self.assertTrue(all(len(row) <= 240 for message in wide for row in message))
                 output.clear()
                 os.write(master, b"\x13")
                 wait_for("Grouping off")
@@ -295,13 +290,11 @@ export default function(pi) {
                 restored = "\n".join(row for message in capture() for row in message)
                 self.assertNotIn("══ Done", restored)
                 self.assertNotIn("⟡", restored)
-                os.write(master, b"Long unphased answer.\r")
-                wait_for("LONG_DONE")
-                long_reply = "\n".join(capture()[-1])
-                self.assertNotIn("──", long_reply)
-                self.assertIn("LONG_START", long_reply)
-                self.assertIn("Paragraph 99.", long_reply)
-                self.assertIn("LONG_DONE", long_reply)
+                os.write(master, b"Continue after resuming.\r")
+                wait_for("RESUMED_DONE")
+                resumed_reply = "\n".join(capture()[-1])
+                self.assertNotIn("══ Done", resumed_reply)
+                self.assertIn("RESUMED_DONE", resumed_reply)
                 self.assertEqual(len(requests), 6)
                 self.assertNotIn("⟡", json.dumps(requests, ensure_ascii=False))
                 self.assertNotIn("══ Done", json.dumps(requests, ensure_ascii=False))

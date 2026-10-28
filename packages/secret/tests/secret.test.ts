@@ -13,7 +13,7 @@ beforeEach(() => {
 const VALUE = "fake-for-tests-only-'\"$ space";
 
 function context(custom: () => Promise<{ value?: string }>, hasUI = true): ExtensionContext {
-  return { mode: hasUI ? "tui" : "rpc", hasUI, ui: { custom, setStatus() {} } } as unknown as ExtensionContext;
+  return { mode: hasUI ? "tui" : "rpc", hasUI, ui: { custom } } as unknown as ExtensionContext;
 }
 
 async function invoke(tool: ToolDefinition, input: Record<string, unknown>, ctx: ExtensionContext, signal?: AbortSignal) {

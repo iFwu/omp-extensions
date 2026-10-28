@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-extensions",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Portable display, input, optional next-step, and session-secret extensions for Oh My Pi 18.12.6",
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,9 @@
   "packageManager": "bun@1.4.4",
   "workspaces": ["packages/*"],
   "scripts": {
-    "test": "bun run --workspaces --parallel --no-exit-on-error test && python3 -m unittest discover -s tests/integration -v",
+    "test": "bun run test:workspaces && bun run test:integration",
+    "test:workspaces": "bun run --workspaces --parallel --no-exit-on-error test",
+    "test:integration": "python3 -m unittest discover -s tests/integration -v",
     "typecheck": "tsc --noEmit",
     "preview:next-action": "python3 scripts/preview-next-action.py",
     "smoke:package": "python3 scripts/smoke-package.py"

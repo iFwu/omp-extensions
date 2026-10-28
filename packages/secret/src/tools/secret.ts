@@ -74,11 +74,6 @@ export function createSecretTool(getVault: () => Vault): ToolDefinition {
         } catch {
           return reply({ status: "invalid", error: "Credential not stored: use at least 8 characters, no NUL, and at most 1 MiB." });
         }
-        try {
-          ctx.ui.setStatus("secret", `secret: ${vault.size()} active`);
-        } catch {
-          // Display failure does not undo a successful in-memory save.
-        }
         return reply({ status: "stored", ref });
       } finally {
         requesting = false;

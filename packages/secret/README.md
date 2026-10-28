@@ -62,6 +62,9 @@ schema exposure and should not be used to enable normal operation.
   `/sec on` enables it again within the loaded extension.
 - Tab completes `{{sec:NAME}}` references. No automatic reference-trigger popup.
 
+No persistent status badge is displayed, including when credentials are present or
+the feature is disabled. Use `/sec list` to inspect the current session on demand.
+
 There is no file import, clipboard restore, plaintext-chat capture, or automatic
 credential detection. Ordinary passwords and token-looking strings entered into
 chat remain ordinary text, not protected secrets.
@@ -91,7 +94,7 @@ commands. Other tools remain native: a reference in a file write is just literal
 text, not a substitution request, and file reads receive no secret filtering.
 
 Credential-command output is buffered in memory. Only exact, explicitly entered
-credential values are replaced with references before OMP receives that output.
+credential values are replaced with a redaction marker before OMP receives that output.
 Unrelated token-looking strings and encoded/transformed values are unchanged:
 there is no shape matching, substring guessing, or encoded-value redaction.
 There is no raw-output temp artifact. Output exceeding 8 MiB stops the process and
