@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-ask-history",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Persist native Ask answers in OMP conversation history without provider-context duplication",
   "type": "module",
   "license": "MIT",

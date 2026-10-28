@@ -1,6 +1,6 @@
 # OMP Extensions
 
-Seven portable display, input, optional next-step, and session-secret extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed. The secret extension is currently **Unreleased**; the existing `v0.4.0` tag does not contain it.
+Seven portable display, input, optional next-step, and session-secret extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed. The optional secret extension is included since `v0.5.0`.
 
 ## Compatibility
 
@@ -11,7 +11,7 @@ This package targets **OMP 18.12.6**; development and CI use Bun **1.4.4**. OMP 
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.4.0
+omp plugin install github:iFwu/omp-extensions#v0.5.0
 omp plugin doctor
 ```
 
@@ -33,7 +33,7 @@ The root manifest explicitly registers each workspace's `src/index.ts`. Workspac
 | [skill-completion](packages/skill-completion/README.md) | Adds `$`, `¥`, and `￥` skill completion through the native editor. |
 | [model-switch](packages/model-switch/README.md) | Rewrites `/model <selector>` and `/models <selector>` to session-only `/switch`; bare `/model` stays the native role hub. |
 | [next-step](packages/next-step/README.md) | Optional ghost drafts and single/multiple choice cards, explicit send/fill controls, and private local feedback; disabled until configured. |
-| [secret](packages/secret/README.md) | On-demand masked credential requests, session-memory references, and foreground Bash injection; disabled until configured (Unreleased). |
+| [secret](packages/secret/README.md) | On-demand masked credential requests, session-memory references, and foreground Bash injection; disabled until configured. |
 
 See [Behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for lifecycle, completion boundaries, native-input preservation, and failure isolation.
 
@@ -58,25 +58,25 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.4.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.4.0
-omp plugin install ./omp-extensions-v0.4.0/packages/skill-completion
+git clone --branch v0.5.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.5.0
+omp plugin install ./omp-extensions-v0.5.0/packages/skill-completion
 omp plugin doctor
 ```
 
 OMP keeps a local link to that package directory: retain the checkout and keep its revision fixed. To upgrade, install from a new release checkout; native upgrade does not update local links. Linking a `main` checkout is a development workflow, not a pinned release installation. Disable or uninstall the suite before enabling individual packages, and do not also register their source files manually.
 
-### Session-secret opt-in (Unreleased)
+### Session-secret opt-in
 
-Use a checkout containing the Unreleased changes, rather than the existing `v0.4.0` tag. Install **either** the suite **or** the standalone package from that retained checkout:
+Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.5.0` checkout created above:
 
 ```sh
 # Suite
-omp plugin install ./omp-extensions
+omp plugin install github:iFwu/omp-extensions#v0.5.0
 omp plugin config set @ifwu/omp-extensions secret true
 omp plugin config get @ifwu/omp-extensions secret --json
 
 # Alternatively, standalone (do not install alongside the suite)
-omp plugin install ./omp-extensions/packages/secret
+omp plugin install ./omp-extensions-v0.5.0/packages/secret
 omp plugin config set @ifwu/omp-secret enabled true
 omp plugin config get @ifwu/omp-secret enabled --json
 ```
