@@ -1,4 +1,4 @@
-"""Real OMP 18.12.6 TUI + loopback models; no credentials, installs or production builds.
+"""Real OMP 18.13.3+ TUI + loopback models; no credentials, installs or production builds.
 
 Run: python3 -m unittest discover -s packages/next-step/tests -v
 Set OMP_BIN to a native OMP binary if it is not discoverable on PATH.
@@ -284,7 +284,7 @@ export default function(pi) {
                     self.directory.cleanup()
 
 
-@unittest.skipUnless(os.name == "posix" and OMP_BIN, "Native POSIX OMP 18.12.6 binary required")
+@unittest.skipUnless(os.name == "posix" and OMP_BIN, "Native POSIX OMP 18.13.3+ binary required")
 class NextStepTUITests(unittest.TestCase):
     def assert_submission_payload(self, session, scene, text):
         request = session.requests()[-1]

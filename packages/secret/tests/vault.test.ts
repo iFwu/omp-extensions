@@ -20,13 +20,17 @@ const K = "4f9c1a7e2b8d0a3c5e7f1b3d9a2c4e6f8b0d2a4c";
 const GH = "ghp_A1b2C3d4E5f6G7h8I9j0K1L2M3N4O5P6Q7R8";
 
 describe("name and ref parsing", () => {
-  it("accepts lowercase names with separators, rejects the rest", () => {
-    expect(isValidName("gh_pat")).toBe(true);
-    expect(isValidName("a")).toBe(true);
-    expect(isValidName("GH_pat")).toBe(false);
-    expect(isValidName("9bad")).toBe(false);
-    expect(isValidName("has space")).toBe(false);
-    expect(isValidName("x".repeat(65))).toBe(false);
+  it("preserves case in names and references while rejecting invalid identifiers", () => {
+    for (const name of ["gh_pat", "a", "PA_E2E_PHONE", "Mixed-Case", "_private"]) {
+      expect(isValidName(name)).toBe(true);
+      expect(parseRef(refToken(name))).toBe(name);
+      expect(findRefs(`before ${refToken(name)} after`).map(ref => ref.name)).toEqual([name]);
+    }
+    for (const name of ["", "9bad", "has space", "bad.name", "x".repeat(65)]) {
+      expect(isValidName(name)).toBe(false);
+      expect(parseRef(refToken(name))).toBeUndefined();
+      expect(findRefs(refToken(name))).toEqual([]);
+    }
   });
 
   it("parses only a whole-string ref", () => {

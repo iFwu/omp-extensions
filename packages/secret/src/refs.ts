@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 /** Explicit reference syntax accepted by credential bash. */
-export const REF_RE = /\{\{sec:([a-z][a-z0-9_-]{0,63})\}\}/g;
+export const REF_RE = /\{\{sec:([A-Za-z_][A-Za-z0-9_-]{0,63})\}\}/g;
 
 
 export interface Ref {
@@ -37,11 +37,11 @@ export function validateCredential(value: string): void {
 }
 
 export function isValidName(name: string): boolean {
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(name);
+  return /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/.test(name);
 }
 
 export function parseRef(text: string): string | undefined {
-  const m = /^\{\{sec:([a-z][a-z0-9_-]{0,63})\}\}$/.exec(text);
+  const m = /^\{\{sec:([A-Za-z_][A-Za-z0-9_-]{0,63})\}\}$/.exec(text);
   return m ? m[1] : undefined;
 }
 
@@ -53,8 +53,8 @@ export function parseRef(text: string): string | undefined {
  * Distinct names must not deliver the wrong credential through a shared variable.
  *
  * Two properties, in order of importance:
- *  - the sanitized body is NOT truncated, so names differing anywhere in their first
- *    64 chars (isValidName caps at 64) already differ here;
+ *  - the sanitized body is NOT truncated, preserving differences except case and
+ *    punctuation across the full 64-character name;
  *  - the tag is 64 bits of sha256 over the whole name. 32 bits was breakable: a
  *    40-char window plus an 8-hex tag makes "x"x45+"4a5" and "x"x45+"1y32" collide,
  *    which is a ~2^16 birthday walk. 64 bits makes the targeted search infeasible.

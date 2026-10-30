@@ -1,6 +1,6 @@
 # Composer
 
-`@ifwu/omp-composer` · OMP 18.12.6 · MIT
+`@ifwu/omp-composer` · OMP 18.13.3+ · MIT
 
 Shaded native input, a separate session title, queue headings, and Working/Worked duration display. Native drafts, queue delivery, status controls, and provider context remain unchanged.
 

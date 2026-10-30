@@ -1,6 +1,6 @@
 # Session secrets
 
-Opt-in, session-local credential input for OMP 18.12.6 on macOS and Linux. Only
+Opt-in, session-local credential input for OMP 18.13.3+ on macOS and Linux. Only
 explicit `/sec add NAME` or a model `secret` request opens masked input and stores
 a credential. The model receives a reference, not the entered value. This is
 accidental-disclosure protection, not an OS sandbox or credential broker.
@@ -40,6 +40,12 @@ The terminal shows the name, purpose and a masked input. A successful result is:
 {"status":"stored","ref":"{{sec:deploy_token}}"}
 ```
 
+Names are case-sensitive and match `[A-Za-z_][A-Za-z0-9_-]{0,63}`: 1–64 ASCII
+characters, starting with a letter or underscore, followed by letters, digits,
+underscores or hyphens. `PA_E2E_PHONE`, `deploy_token` and `_Mixed-Key` are valid;
+`TOKEN` and `token` identify separate credentials. Request, `/sec` management,
+reference completion and Bash consumption preserve the exact spelling.
+
 `{"action":"list"}` returns references only, without previews, fingerprints,
 lengths or values. An existing name returns `available` without another dialog or
 an overwrite. Cancellation, headless use, invalid input and a busy dialog return
@@ -69,8 +75,9 @@ There is no file import, clipboard restore, plaintext-chat capture, or automatic
 credential detection. Ordinary passwords and token-looking strings entered into
 chat remain ordinary text, not protected secrets.
 
-Input is an inline TUI component, not a separate macOS window. The model-facing
-request never falls back to asking for a plaintext chat message.
+Input uses OMP's native `ctx.ui.input(..., { secret: true })` dialog, including its
+masked rendering, editing, paste handling and cancellation. This requires OMP
+18.13.3 or newer. Credential entry remains TUI-only, with no plaintext fallback.
 
 ## Command execution
 

@@ -26,7 +26,7 @@ export function createSecretTool(getVault: () => Vault): ToolDefinition {
     approval: "read",
     parameters: Type.Object({
       action: Type.Union([Type.Literal("request"), Type.Literal("list")]),
-      name: Type.Optional(Type.String({ pattern: "^[a-z][a-z0-9_-]{0,63}$" })),
+      name: Type.Optional(Type.String({ pattern: "^[A-Za-z_][A-Za-z0-9_-]{0,63}$" })),
       reason: Type.Optional(Type.String({ minLength: 1, maxLength: 240 })),
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {

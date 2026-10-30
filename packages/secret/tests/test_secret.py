@@ -363,7 +363,7 @@ class SecretRuntimeTests(unittest.TestCase):
             self.assertIn("write", names)
             self.assertNotIn("secret", names, "secret must remain discoverable, not top-level")
 
-        request = {"action": "request", "name": "canary", "reason": "Authenticate local smoke endpoint"}
+        request = {"action": "request", "name": "PA_E2E_PHONE", "reason": "Authenticate local smoke endpoint"}
         with self.subTest("model-triggered masked input"):
             previous = session.start_turn("write", {"i": "Requesting credential input", "path": "xd://secret",
                                                      "content": json.dumps(request)})
@@ -375,16 +375,16 @@ class SecretRuntimeTests(unittest.TestCase):
             session.child.send("\r")
             result = session.finish_turn(previous)
             self.assertIn("stored", result)
-            self.assertIn("{{sec:canary}}", result)
+            self.assertIn("{{sec:PA_E2E_PHONE}}", result)
             self.assertIn("available", session.secret(request))
             result = session.secret({"action": "list"})
-            self.assertIn("{{sec:canary}}", result)
+            self.assertIn("{{sec:PA_E2E_PHONE}}", result)
             self.assertNotIn("sec:cancelled", result)
             self.assertNotIn("sec:short", result)
 
         with self.subTest("exact loopback receipt and echoed output redaction"):
-            command = (f'curl -fsS -H "Authorization: Bearer {{{{sec:canary}}}}" '
-                       f'http://127.0.0.1:{server.server_port}/credential; printf "\\n%s\\n" "{{{{sec:canary}}}}"')
+            command = (f'curl -fsS -H "Authorization: Bearer {{{{sec:PA_E2E_PHONE}}}}" '
+                       f'http://127.0.0.1:{server.server_port}/credential; printf "\\n%s\\n" "{{{{sec:PA_E2E_PHONE}}}}"')
             result = session.turn("bash", {"i": "Testing credential transport", "command": command, "timeout": 10})
             self.assertEqual(server.auth, [True], "target must receive the exact punctuation-bearing value")
             self.assertIn("AUTH_OK", result)
@@ -392,11 +392,11 @@ class SecretRuntimeTests(unittest.TestCase):
 
         with self.subTest("credential output redacts exact values only"):
             result = session.turn("bash", {"i": "Checking exact redaction",
-                "command": 'printf "%s\\n" "{{sec:canary}}"; printf \'%s\' \'' + ordinary + "'", "timeout": 5})
+                "command": 'printf "%s\\n" "{{sec:PA_E2E_PHONE}}"; printf \'%s\' \'' + ordinary + "'", "timeout": 5})
             self.assertIn(ordinary, result, "unrelated credential-shaped output must remain unchanged")
             self.assertNotIn(canary, result)
             result = session.turn("bash", {"i": "Checking encoded output boundary",
-                "command": 'printf "%s" "{{sec:canary}}" | base64 | tr -d \'\\n\'', "timeout": 5})
+                "command": 'printf "%s" "{{sec:PA_E2E_PHONE}}" | base64 | tr -d \'\\n\'', "timeout": 5})
             self.assertIn(base64.b64encode(canary.encode()).decode(), result,
                           "encoded values are not guessed or rewritten")
             listed = session.secret({"action": "list"})
@@ -412,24 +412,24 @@ class SecretRuntimeTests(unittest.TestCase):
             result = session.turn("bash", {"i": "Testing missing reference", "command": 'printf "%s" "{{sec:missing}}"', "timeout": 5})
             self.assertIn("missing", result)
             self.assertTrue("not found" in result or "unknown" in result)
-            session.turn("write", {"i": "Preserving literal reference", "path": "reference.txt", "content": "{{sec:canary}}"})
-            self.assertEqual((root / "reference.txt").read_text(), "{{sec:canary}}",
+            session.turn("write", {"i": "Preserving literal reference", "path": "reference.txt", "content": "{{sec:PA_E2E_PHONE}}"})
+            self.assertEqual((root / "reference.txt").read_text(), "{{sec:PA_E2E_PHONE}}",
                              "non-Bash tools must not interpret or block reference strings")
             for flag, value in (("pty", True), ("async", True), ("name", "secret-fixture-service"),
                                 ("ready", {"log": "READY"})):
-                result = session.turn("bash", {"i": "Testing foreground restriction", "command": 'printf "%s" "{{sec:canary}}"', "timeout": 5, flag: value})
+                result = session.turn("bash", {"i": "Testing foreground restriction", "command": 'printf "%s" "{{sec:PA_E2E_PHONE}}"', "timeout": 5, flag: value})
                 self.assertIn("foreground", result)
 
         with self.subTest("timeout kills credential child"):
-            result = session.turn("bash", {"i": "Testing timeout", "command": "TOKEN={{sec:canary}} sleep 10", "timeout": 0.2})
+            result = session.turn("bash", {"i": "Testing timeout", "command": "TOKEN={{sec:PA_E2E_PHONE}} sleep 10", "timeout": 0.2})
             self.assertIn("timed out", result)
 
         with self.subTest("new session clears vault"):
             session.send("/new")
             session.wait(lambda: "fixture" in session.visible().lower()
                          and f"SECRET_DONE_{len(server.tool_results)}" not in session.visible(), "new session editor")
-            self.assertNotIn("sec:canary", session.secret({"action": "list"}))
-            result = session.turn("bash", {"i": "Checking cleared reference", "command": 'printf "%s" "{{sec:canary}}"', "timeout": 5})
+            self.assertNotIn("sec:PA_E2E_PHONE", session.secret({"action": "list"}))
+            result = session.turn("bash", {"i": "Checking cleared reference", "command": 'printf "%s" "{{sec:PA_E2E_PHONE}}"', "timeout": 5})
             self.assertTrue("not found" in result or "unknown" in result)
 
         with self.subTest("provider, terminal, sessions and runtime files contain no canary"):

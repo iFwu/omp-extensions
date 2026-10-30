@@ -1,7 +1,7 @@
 {
   "name": "@ifwu/omp-extensions",
-  "version": "0.5.3",
-  "description": "Portable display, input, optional next-step, and session-secret extensions for Oh My Pi 18.12.6",
+  "version": "0.6.0",
+  "description": "Portable display, input, optional next-step, and session-secret extensions for Oh My Pi 18.13.3+",
   "type": "module",
   "license": "MIT",
   "author": "iFwu",
@@ -42,10 +42,10 @@
   },
   "peerDependencies": {
     "@sinclair/typebox": "0.34.52",
-    "@oh-my-pi/pi-ai": "18.12.6",
-    "@oh-my-pi/pi-coding-agent": "18.12.6",
-    "@oh-my-pi/pi-utils": "18.12.6",
-    "@oh-my-pi/pi-tui": "18.12.6"
+    "@oh-my-pi/pi-ai": "18.13.3",
+    "@oh-my-pi/pi-coding-agent": "18.13.3",
+    "@oh-my-pi/pi-utils": "18.13.3",
+    "@oh-my-pi/pi-tui": "18.13.3"
   },
   "peerDependenciesMeta": {
     "@sinclair/typebox": { "optional": true },
@@ -56,10 +56,10 @@
   },
   "devDependencies": {
     "@sinclair/typebox": "0.34.52",
-    "@oh-my-pi/pi-ai": "18.12.6",
-    "@oh-my-pi/pi-coding-agent": "18.12.6",
-    "@oh-my-pi/pi-utils": "18.12.6",
-    "@oh-my-pi/pi-tui": "18.12.6",
+    "@oh-my-pi/pi-ai": "18.13.3",
+    "@oh-my-pi/pi-coding-agent": "18.13.3",
+    "@oh-my-pi/pi-utils": "18.13.3",
+    "@oh-my-pi/pi-tui": "18.13.3",
     "@types/bun": "1.3.14",
     "typescript": "5.9.3"
   }

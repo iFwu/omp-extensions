@@ -11,8 +11,9 @@ describe("findRefs", () => {
     expect(findRefs(text).map((r) => ({ raw: r.raw, name: r.name }))).toEqual(expected);
   });
 
-  it("ignores malformed or uppercase names", () => {
-    expect(findRefs("{{sec:GH_PAT}} {{sec:}} {{ sec:x }} {{sec:ok-name}}")).toHaveLength(1);
+  it("ignores malformed references alongside valid case-sensitive names", () => {
+    expect(findRefs("{{sec:GH_PAT}} {{sec:}} {{ sec:x }} {{sec:ok-name}}").map(ref => ref.name))
+      .toEqual(["GH_PAT", "ok-name"]);
   });
 
   it("finds the inner well-formed ref inside a malformed outer token", () => {

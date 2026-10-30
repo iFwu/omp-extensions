@@ -1,6 +1,6 @@
 # Ask History
 
-`@ifwu/omp-ask-history` · OMP 18.12.6 · MIT
+`@ifwu/omp-ask-history` · OMP 18.13.3+ · MIT
 
 Keep native Ask questions and answers readable when tool activity is hidden, and retain them across session resume without adding display records to model context.
 

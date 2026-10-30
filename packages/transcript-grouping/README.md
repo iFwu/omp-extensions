@@ -1,6 +1,6 @@
 # Transcript Grouping
 
-`@ifwu/omp-transcript-grouping` · OMP 18.12.6 · MIT
+`@ifwu/omp-transcript-grouping` · OMP 18.13.3+ · MIT
 
 Display-only transcript gaps, tool counts, foreground tool-wait timing, and completed-final separators. Copying, provider messages, and tool execution stay native.
 

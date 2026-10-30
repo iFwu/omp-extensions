@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { runSecretCommand, injectBashCommand, registerSecureBash, redactCredentialOutput } from "../src/tools/bash.ts";
 import { setEnabled } from "../src/state.ts";
 import { Vault } from "../src/vault.ts";
+import { createSecretTool } from "../src/tools/secret.ts";
+import { createSecAutocompleteProvider } from "../src/autocomplete.ts";
 
 const cwd = process.cwd();
 
@@ -93,6 +95,29 @@ function credentialTool(vault: Vault) {
 const executionContext = { cwd, agent: { kind: "main" } } as unknown as ExtensionContext;
 
 describe("explicit credential boundary", () => {
+  it("requests and consumes case-distinct names without mixing credentials", async () => {
+    const vault = new Vault("case-sensitive");
+    setEnabled(true);
+    const secret = createSecretTool(() => vault);
+    const entries = [["TOKEN", "synthetic-upper"], ["token", "synthetic-lower"], ["_Mixed-Key", "synthetic-mixed"]];
+    for (const [name, value] of entries) {
+      const ctx = { ...executionContext, mode: "tui", hasUI: true, ui: { input: async () => value } } as unknown as ExtensionContext;
+      const result = await secret.execute("request", { action: "request", name, reason: "Local fixture" }, undefined, undefined, ctx);
+      expect(result.content).toEqual([{ type: "text", text: JSON.stringify({ status: "stored", ref: `{{sec:${name}}}` }) }]);
+    }
+    const completion = createSecAutocompleteProvider(() => vault);
+    const suggestions = await completion.getSuggestions(["{{sec:TO"], 0, 8);
+    expect(suggestions?.items.map(item => item.value)).toEqual(["TOKEN"]);
+    const expanded = injectBashCommand('printf "%s|%s|%s" "{{sec:TOKEN}}" "{{sec:token}}" "{{sec:_Mixed-Key}}"', vault);
+    expect(expanded.block).toBeUndefined();
+    const result = await runSecretCommand(expanded.command, cwd, expanded.env, 5);
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toBe("synthetic-upper|synthetic-lower|synthetic-mixed");
+    expect(redactCredentialOutput(result.output, entries.map(([, value]) => value!)))
+      .toBe("[credential redacted]|[credential redacted]|[credential redacted]");
+    expect(injectBashCommand('printf "%s" "{{sec:Token}}"', vault).block).toBeDefined();
+  });
+
   it("redacts exact values only, without interpreting token shapes or encoded forms", () => {
     const value = "synthetic.p[a]ss+$";
     const ordinary = "confirm_password_ref=css:input[name=confirm] sk-proj-NotAStoredCredential123456789";

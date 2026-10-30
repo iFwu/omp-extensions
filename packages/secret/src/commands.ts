@@ -42,7 +42,7 @@ export async function runSecCommand(input: string, vault: Vault, ctx: ExtensionC
       return;
     case "add": {
       if (!isValidName(name)) {
-        ctx.ui.notify("invalid name (want /^[a-z][a-z0-9_-]{0,63}$/)", "warning");
+        ctx.ui.notify("invalid name (want /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/)", "warning");
         return;
       }
       if (!isEnabled()) {

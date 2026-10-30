@@ -23,7 +23,7 @@ TEXT = "PACKAGE_SMOKE_OK"
 def smoke_package(package_directory, install_source=None):
     binary = shutil.which(os.environ.get("OMP_BIN", "omp"))
     if not binary:
-        raise RuntimeError("Set OMP_BIN to the official OMP 18.12.6 standalone binary")
+        raise RuntimeError("Set OMP_BIN to the official OMP 18.13.3+ standalone binary")
     with tempfile.TemporaryDirectory(prefix="omp-package-") as directory:
         root = Path(directory)
         home = root / "home"

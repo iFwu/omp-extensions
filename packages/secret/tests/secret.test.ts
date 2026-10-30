@@ -12,8 +12,8 @@ beforeEach(() => {
 
 const VALUE = "fake-for-tests-only-'\"$ space";
 
-function context(custom: () => Promise<{ value?: string }>, hasUI = true): ExtensionContext {
-  return { mode: hasUI ? "tui" : "rpc", hasUI, ui: { custom } } as unknown as ExtensionContext;
+function context(inputResponse: () => Promise<{ value?: string }>, hasUI = true): ExtensionContext {
+  return { mode: hasUI ? "tui" : "rpc", hasUI, ui: { input: async () => (await inputResponse()).value } } as unknown as ExtensionContext;
 }
 
 async function invoke(tool: ToolDefinition, input: Record<string, unknown>, ctx: ExtensionContext, signal?: AbortSignal) {
@@ -214,7 +214,7 @@ describe("explicit /sec management", () => {
   it("never accepts values in command arguments or invokes removed import/restore paths", async () => {
     const vault = new Vault("arguments");
     const { ctx, messages } = commandContext(async () => { throw new Error("unexpected dialog"); });
-    for (const input of [`add api ${VALUE}`, "add-from-file /tmp/fixture", "restore api", "add Invalid"]) {
+    for (const input of [`add api ${VALUE}`, "add-from-file /tmp/fixture", "restore api", "add 9invalid"]) {
       await runSecCommand(input, vault, ctx);
     }
     expect(vault.size()).toBe(0);

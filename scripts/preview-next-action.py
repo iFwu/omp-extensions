@@ -28,7 +28,7 @@ def standalone_binary():
             magic = binary.read(4)
         if magic in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe", b"\x7fELF"):
             return candidate
-    raise SystemExit("Set OMP_BIN to the official OMP 18.12.6 standalone binary (not a wrapper).")
+    raise SystemExit("Set OMP_BIN to the official OMP 18.13.3+ standalone binary (not a wrapper).")
 
 
 def clean_env(*, offline):
@@ -216,8 +216,9 @@ def main():
     args = parser.parse_args()
     binary = standalone_binary()
     version = subprocess.check_output([binary, "--version"], text=True).strip()
-    if version != "omp/18.12.6":
-        raise SystemExit(f"Expected OMP 18.12.6, got {version}")
+    match = re.fullmatch(r"omp/(\d+)\.(\d+)\.(\d+)(?:[-+].+)?", version)
+    if not match or tuple(map(int, match.groups())) < (18, 13, 3):
+        raise SystemExit(f"Expected OMP 18.13.3 or newer, got {version}")
     if args.live:
         command = [binary, "--cwd", str(Path.cwd()), "--no-extensions"]
         entries = json.loads((REPO / "package.json").read_text())["omp"]["extensions"]

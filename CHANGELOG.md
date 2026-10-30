@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- Allow uppercase and mixed-case session-secret names and leading underscores across masked requests, `/sec` management, reference parsing and Tab completion. Preserve case-sensitive identity, existing lowercase/hyphenated names and the 64-character limit; credential isolation and exact-output redaction are unchanged.
+- Require OMP 18.13.3 or newer and replace the custom secret-input component with native `ctx.ui.input(..., { secret: true, signal })`. Remove the private keystroke parser and its component tests; retain real TUI masking, cancellation, transport and persistence checks. Move the development SDK and CI host to 18.13.3.
+
 ## 0.5.3
 
 - Drain next-step fixture PTY output while waiting for SIGTERM shutdown, avoiding blocked terminal writes and repeated five-second waits before forced termination.

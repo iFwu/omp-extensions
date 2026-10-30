@@ -6,7 +6,7 @@ const PREFIX = "{{sec:";
 
 /** The partially-typed ref immediately before the cursor, or null. */
 export function refPrefixBefore(textBeforeCursor: string): { prefix: string; typed: string } | null {
-  const m = /\{\{sec:([a-z0-9_-]*)$/.exec(textBeforeCursor);
+  const m = /\{\{sec:([A-Za-z0-9_-]*)$/.exec(textBeforeCursor);
   if (!m) return null;
   return { prefix: PREFIX + m[1]!, typed: m[1]! };
 }
