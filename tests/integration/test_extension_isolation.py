@@ -114,7 +114,6 @@ class ExtensionIsolationTests(unittest.TestCase):
                 "display": {"hideToolActivity": True}, "hideThinkingBlock": True,
                 "providers": {"cacheWarming": "off"}, "retry": {"enabled": False, "modelFallback": False},
                 "compaction": {"enabled": False}, "completion": {"notify": "off"},
-                "composer": {"shape": "dotfiles/claude-context"} if "composer" in extensions else {},
             })
             write_yaml(root / "shared.yml", {"display": {"hideToolActivity": True}})
             write_yaml(root / "keybindings.yml", {"app.tools.toggleVisibility": "Ctrl+O"})
@@ -127,7 +126,7 @@ import { toolRenderers } from "@oh-my-pi/pi-tui/tools";
 import { lookup } from "@oh-my-pi/pi-coding-agent/config/registry";
 import { writeFileSync } from "node:fs";
 export default function(pi) {
- let grouping=false, queue=false, input=false, visibility=false, ask="";
+ let grouping=false, queue=false, visibility=false, ask="";
  const describe=AssistantMessageComponent.prototype.describe;
  AssistantMessageComponent.prototype.describe=function(...args) {
    if(grouping) {grouping=false;throw new Error("Injected grouping display failure");}
@@ -137,11 +136,6 @@ export default function(pi) {
  theme.bold=function(text) {
    if(queue && text.includes("▌")) {queue=false;throw new Error("Injected queue styling failure");}
    return bold.call(this,text);
- };
- const fill=theme.bgFill;
- theme.bgFill=function(color,text) {
-   if(input && text.includes("INPUT_SURVIVES_FAILURE")) {input=false;throw new Error("Injected input styling failure");}
-   return fill.call(this,color,text);
  };
  const hideTools=lookup("display.hideToolActivity");
  const override=hideTools.override;
@@ -158,7 +152,6 @@ export default function(pi) {
  pi.registerCommand("inject-failure", {description:"Inject an isolated display failure",handler:(mode,ctx)=>{
    if(mode==="grouping") grouping=true;
    if(mode==="queue") queue=true;
-   if(mode==="input") input=true;
    if(mode==="visibility") visibility=true;
    if(mode.startsWith("ask-")) {
      ask=mode.slice(4);
@@ -177,7 +170,7 @@ export default function(pi) {
  }});
  pi.on("session_shutdown",()=>{
    AssistantMessageComponent.prototype.describe=describe;
-   theme.bold=bold;theme.bgFill=fill;toolRenderers.ask.renderResult=askResult;
+   theme.bold=bold;toolRenderers.ask.renderResult=askResult;
    hideTools.override=override;
  });
 }
@@ -294,7 +287,6 @@ export default function(pi) {
             send("Continue with the other extensions still active.")
             settled(3)
             self.assertNotIn("Grouping disabled", output.decode(errors="replace"))
-            self.assertNotIn("Composer styling disabled", output.decode(errors="replace"))
 
     def test_grouping_live_thinking_and_fault_do_not_interrupt_followups(self):
         with self.session("transcript-grouping") as (root, process, requests, gate, blocked, send, see, until, settled, output):
@@ -320,15 +312,10 @@ export default function(pi) {
             self.assertIsNone(process.poll())
             self.assertNotIn("dotfiles.grouping", json.dumps(requests))
 
-    def test_composer_and_queue_faults_preserve_input_and_queued_delivery(self):
+    def test_queue_fault_preserves_queued_delivery(self):
         with self.session("composer") as (root, process, requests, gate, blocked, send, see, until, settled, output):
-            send("/inject-failure input")
-            see("Fault armed: input")
-            send("INPUT_SURVIVES_FAILURE", submit=False)
-            see("Composer styling disabled after an error")
-            send("")
+            send("Complete the first turn.")
             settled(2)
-            self.assertIn("INPUT_SURVIVES_FAILURE", json.dumps(requests[0]))
             blocked[0] = 3
             gate.clear()
             send("Start a blocking turn.")

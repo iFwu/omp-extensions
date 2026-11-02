@@ -93,7 +93,7 @@ export default function(pi) {
                     'auth': 'apiKey', 'apiKey': 'test-only-key', 'models': [{'id': 'ui-model', 'name': 'UI Model',
                     'reasoning': False, 'input': ['text'], 'contextWindow': 100000, 'maxTokens': 1024}]}}})
                 write_yaml(root / 'config.yml', {
-                    'composer': {'shape': 'dotfiles/claude-context'}, 'symbolPreset': 'unicode',
+                    'symbolPreset': 'unicode',
                     'theme': {'dark': appearance, 'light': appearance},
                     'startup': {'setupWizard': False, 'checkUpdate': False, 'quiet': True},
                     'retry': {'enabled': False, 'modelFallback': False}, 'providers': {'cacheWarming': 'off'},

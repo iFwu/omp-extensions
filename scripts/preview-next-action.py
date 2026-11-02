@@ -175,7 +175,6 @@ def offline_launch(binary, root, server, *, scene=None, effort="low", extra_exte
         "retry": {"enabled": False, "modelFallback": False}, "compaction": {"enabled": False},
         "completion": {"notify": "off"}, "spelling": {"enabled": False},
         "skills": {"enableSkillCommands": True, "includeSkills": ["fixture-*"]},
-        "composer": {"shape": "dotfiles/claude-context"},
     }
     models = {"providers": {"preview-fixture": {
         "baseUrl": f"http://127.0.0.1:{server.server_port}/v1", "api": "openai-responses",

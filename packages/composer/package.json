@@ -1,7 +1,7 @@
 {
   "name": "@ifwu/omp-composer",
-  "version": "0.6.0",
-  "description": "Native OMP composer, queue presentation, and turn activity styling",
+  "version": "0.7.0",
+  "description": "OMP queue presentation and turn activity timing",
   "type": "module",
   "license": "MIT",
   "author": "iFwu",

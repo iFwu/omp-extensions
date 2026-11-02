@@ -2,7 +2,7 @@
 
 `@ifwu/omp-composer` · OMP 18.13.3+ · MIT
 
-Shaded native input, a separate session title, queue headings, and Working/Worked duration display. Native drafts, queue delivery, status controls, and provider context remain unchanged.
+Queue headings and Working/Worked duration display. The input editor, drafts, queue delivery, status controls, and provider context remain native.
 
 ## Install this package only
 
@@ -17,20 +17,11 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 
 ## Behavior
 
-Select the historical composer shape in your own OMP configuration:
-
-```yaml
-composer:
-  shape: dotfiles/claude-context
-```
-
-Queue and activity enhancements do not require selecting that shape. This package does not write your configuration.
-
-See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
+The input editor and status line are native OMP; this package registers no composer shape and writes no configuration. See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests
 
-`src/index.ts` coordinates registration and lifecycle. `composer.ts` owns input rendering, `queue.ts` owns queue decoration and rollback, and `activity.ts` owns working intent and timing.
+`src/index.ts` coordinates registration and lifecycle. `queue.ts` owns queue decoration and rollback, and `activity.ts` owns working intent and timing.
 
 After the repository's [development setup](https://github.com/iFwu/omp-extensions#development-and-verification), run from its root:
 

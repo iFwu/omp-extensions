@@ -1,6 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { createActivity } from "./activity";
-import { registerComposer } from "./composer";
 import { createQueueEnhancements } from "./queue";
 
 export default async function (pi: ExtensionAPI) {
@@ -30,6 +29,4 @@ export default async function (pi: ExtensionAPI) {
   pi.on("agent_end", activity.end);
   pi.on("session_switch", (_event, ctx) => { activity.sessionSwitch(ctx); });
   pi.on("session_shutdown", (_event, ctx) => { activity.sessionSwitch(ctx); });
-
-  registerComposer(pi, displayFailure);
 }

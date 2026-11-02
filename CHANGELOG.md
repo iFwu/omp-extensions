@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- Remove the `dotfiles/claude-context` shaded composer shape and its session-title row; the input editor and status line are native OMP. Configurations that still select that shape should reset `composer.shape`. Queue headings, Working/Worked timing, and the other extensions are unchanged.
+
 ## 0.6.0
 
 - Allow uppercase and mixed-case session-secret names and leading underscores across masked requests, `/sec` management, reference parsing and Tab completion. Preserve case-sensitive identity, existing lowercase/hyphenated names and the 64-character limit; credential isolation and exact-output redaction are unchanged.

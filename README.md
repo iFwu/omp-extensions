@@ -11,7 +11,7 @@ This package requires **OMP 18.13.3 or newer**; development and CI use the **18.
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.6.0
+omp plugin install github:iFwu/omp-extensions#v0.7.0
 omp plugin doctor
 ```
 
@@ -27,7 +27,7 @@ The root manifest explicitly registers each workspace's `src/index.ts`. Workspac
 
 | Package | Behavior |
 | --- | --- |
-| [composer](packages/composer/README.md) | Shaded composer, session title, queued-message presentation, turn timing, and native status attachment. |
+| [composer](packages/composer/README.md) | Queued-message headings and Working/Worked turn timing; the input editor stays native. |
 | [transcript-grouping](packages/transcript-grouping/README.md) | Groups transcript tool activity and distinguishes commentary from completed final answers. |
 | [ask-history](packages/ask-history/README.md) | Renders persisted Ask answers using native history styling, retaining plain-text answers if styling fails. |
 | [skill-completion](packages/skill-completion/README.md) | Adds `$`, `¥`, and `￥` skill completion through the native editor. |
@@ -36,15 +36,6 @@ The root manifest explicitly registers each workspace's `src/index.ts`. Workspac
 | [secret](packages/secret/README.md) | On-demand masked credential requests, session-memory references, and foreground Bash injection; disabled until configured. |
 
 See [Behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for lifecycle, completion boundaries, native-input preservation, and failure isolation.
-
-To select the composer, set the following in your own OMP configuration:
-
-```yaml
-composer:
-  shape: dotfiles/claude-context
-```
-
-The historical `dotfiles/claude-context` composer identifier and `dotfiles.ask-history` persisted message type are deliberately unchanged so existing configurations and session records remain usable. Their names do not require a dotfiles checkout. The package does not write this configuration for you; without selecting the shape, the composer registration is available but the native selected shape remains in use.
 
 ### Selecting extensions
 
@@ -58,8 +49,8 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.6.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.6.0
-omp plugin install ./omp-extensions-v0.6.0/packages/skill-completion
+git clone --branch v0.7.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.7.0
+omp plugin install ./omp-extensions-v0.7.0/packages/skill-completion
 omp plugin doctor
 ```
 
@@ -67,16 +58,16 @@ OMP keeps a local link to that package directory: retain the checkout and keep i
 
 ### Session-secret opt-in
 
-Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.6.0` checkout created above:
+Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.7.0` checkout created above:
 
 ```sh
 # Suite
-omp plugin install github:iFwu/omp-extensions#v0.6.0
+omp plugin install github:iFwu/omp-extensions#v0.7.0
 omp plugin config set @ifwu/omp-extensions secret true
 omp plugin config get @ifwu/omp-extensions secret --json
 
 # Alternatively, standalone (do not install alongside the suite)
-omp plugin install ./omp-extensions-v0.6.0/packages/secret
+omp plugin install ./omp-extensions-v0.7.0/packages/secret
 omp plugin config set @ifwu/omp-secret enabled true
 omp plugin config get @ifwu/omp-secret enabled --json
 ```

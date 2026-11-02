@@ -95,8 +95,6 @@ def smoke_package(package_directory, install_source=None):
                   "providers": {"cacheWarming": "off"},
                   "retry": {"enabled": False, "modelFallback": False}, "compaction": {"enabled": False},
                   "memory": {"backend": "off"}, "completion": {"notify": "off"}}
-        if manifest["name"] in {"@ifwu/omp-extensions", "@ifwu/omp-composer"}:
-            config["composer"] = {"shape": "dotfiles/claude-context"}
         models = {"providers": {"package-fixture": {"baseUrl": f"http://127.0.0.1:{server.server_port}/v1",
                   "api": "openai-responses", "auth": "apiKey", "apiKey": "fixture-only",
                   "models": [{"id": "fixture", "name": "Package Fixture", "input": ["text"],
