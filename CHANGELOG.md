@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- Render the elapsed time of gaps of at least 120 seconds in the same muted color as other gap statistics; the following blank line still separates longer phases. `Done` separators are unchanged.
+
 ## 0.7.0
 
 - Remove the `dotfiles/claude-context` shaded composer shape and its session-title row; the input editor and status line are native OMP. Configurations that still select that shape should reset `composer.shape`. Queue headings, Working/Worked timing, and the other extensions are unchanged.

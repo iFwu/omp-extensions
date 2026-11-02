@@ -40,10 +40,7 @@ export function renderGroupingLabel(marker: GroupingMarker, limit: number, color
     const separator = level < 2 ? " · " : " ";
     const parts: string[] = [];
     if (marker.kind === "final") parts.push(strong("══ Done"));
-    if (level < 3) {
-      const time = duration(marker.seconds, level >= 2);
-      parts.push(marker.kind === "phase" ? strong(time) : dim(time));
-    }
+    if (level < 3) parts.push(dim(duration(marker.seconds, level >= 2)));
     if (step === 0 && marker.blocking !== undefined && marker.blocking > 0) parts.push(dim(`⟡ ${duration(marker.blocking, false)}`));
     if (marker.tools > 0 && level < 4) {
       parts.push(dim(level === 0 ? `${marker.tools} ${marker.tools === 1 ? "tool" : "tools"}` : `${marker.tools}t`));
