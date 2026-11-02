@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- Render all grouping statistics, including failure counts, in the theme's `borderMuted` color on light themes; dark themes keep `dim` because `borderMuted` nearly matches their background. `Done` labels and rules are unchanged.
+
 ## 0.7.1
 
 - Render the elapsed time of gaps of at least 120 seconds in the same muted color as other gap statistics; the following blank line still separates longer phases. `Done` separators are unchanged.

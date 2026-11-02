@@ -29,7 +29,8 @@ function duration(seconds: number, compact: boolean): string {
 export function renderGroupingLabel(marker: GroupingMarker, limit: number, colors: Colors): string {
   if (!Number.isFinite(limit) || limit < 1) return "";
   if (marker.kind === "final" && marker.seconds < 120) return "";
-  const dim = (text: string) => colors.fg("dim", text);
+  // Dark themes make borderMuted nearly match the background, so only light themes use it for statistics.
+  const faint = (text: string) => colors.fg(colors.isLight ? "borderMuted" : "dim", text);
   // Built-in light themes make mdLinkUrl equal to dim and mdHr as dark as muted text.
   const strong = (text: string) => colors.fg(colors.isLight ? "mdLink" : "mdLinkUrl", text);
   const ruleColor: ColorName = colors.isLight ? "borderMuted" : "mdHr";
@@ -40,13 +41,13 @@ export function renderGroupingLabel(marker: GroupingMarker, limit: number, color
     const separator = level < 2 ? " · " : " ";
     const parts: string[] = [];
     if (marker.kind === "final") parts.push(strong("══ Done"));
-    if (level < 3) parts.push(dim(duration(marker.seconds, level >= 2)));
-    if (step === 0 && marker.blocking !== undefined && marker.blocking > 0) parts.push(dim(`⟡ ${duration(marker.blocking, false)}`));
+    if (level < 3) parts.push(faint(duration(marker.seconds, level >= 2)));
+    if (step === 0 && marker.blocking !== undefined && marker.blocking > 0) parts.push(faint(`⟡ ${duration(marker.blocking, false)}`));
     if (marker.tools > 0 && level < 4) {
-      parts.push(dim(level === 0 ? `${marker.tools} ${marker.tools === 1 ? "tool" : "tools"}` : `${marker.tools}t`));
+      parts.push(faint(level === 0 ? `${marker.tools} ${marker.tools === 1 ? "tool" : "tools"}` : `${marker.tools}t`));
     }
-    if (marker.failures > 0) parts.push(dim(level === 0 ? `${marker.failures} failed` : `${marker.failures}!`));
-    const label = parts.join(dim(separator));
+    if (marker.failures > 0) parts.push(faint(level === 0 ? `${marker.failures} failed` : `${marker.failures}!`));
+    const label = parts.join(faint(separator));
     const width = visibleWidth(label);
     if (!label || width > limit) continue;
     const rest = Math.min(RULE_WIDTH, limit) - width - 1;

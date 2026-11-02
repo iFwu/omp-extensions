@@ -51,6 +51,15 @@ for (const [seconds, duration] of [[0, "0s"], [59, "59s"], [60, "1m00s"],
 }
 """)
 
+    def test_statistics_use_faint_color_readable_on_both_themes(self):
+        self.run_formatter(r"""
+const marker = { kind: "phase", seconds: 155, tools: 6, failures: 1, blocking: 27 };
+const colorsUsed = isLight => [...renderGroupingLabel(marker, 100, theme(isLight)).matchAll(/\x1b\[(\d+)m/g)].map(m => m[1]);
+// borderMuted is nearly the background on dark themes, so dark keeps dim text.
+assert.deepEqual(new Set(colorsUsed(true)), new Set(["37", "0"]));
+assert.deepEqual(new Set(colorsUsed(false)), new Set(["2", "0"]));
+""")
+
     def test_only_final_labels_require_two_minutes_of_round_time(self):
         self.run_formatter(r"""
 for (const seconds of [0, 10, 30, 119, 119.9]) {

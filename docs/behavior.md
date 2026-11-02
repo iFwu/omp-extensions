@@ -17,8 +17,8 @@ Grouping is on by default. `Ctrl+S` or `/grouping` toggles it independently of t
 Grouping inserts gap statistics and completed-final separators without changing assistant text, copying behavior, or provider context:
 
 - A gap shorter than 10 seconds, with fewer than three tools and no failure, gets no marker. No gap marker precedes the first commentary segment.
-- Other gaps show elapsed time, tool count, and failure count. Tools are deduplicated by call ID.
-- Gaps of at least 120 seconds are followed by a blank line, using the same muted color as other gap statistics. A tool-blocked interval of at least one second adds a separate tool-wait duration.
+- Other gaps show elapsed time, tool count, and failure count. Tools are deduplicated by call ID. All statistics, including failures, share one faint color: the theme's `borderMuted` on light themes and `dim` on dark themes, where `borderMuted` is nearly the background.
+- Gaps of at least 120 seconds are followed by a blank line. A tool-blocked interval of at least one second adds a separate tool-wait duration.
 - A normal final answer with total turn time of at least 120 seconds gets a `Done` separator. Crossing the boundary while streaming updates the marker at normal completion.
 - Errors, aborted or length-limited replies, and explicit commentary are not promoted to completed final answers. Responses phase metadata may identify a final answer earlier; without it, the final segment is confirmed only after the turn completes normally.
 
