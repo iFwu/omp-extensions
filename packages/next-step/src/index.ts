@@ -48,7 +48,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   let visible = false;
   let selected = 0;
   const checked = new Set<number>();
-  let previewText: string | undefined;
+  let preview: string[] | undefined;
   let picker: AbortController | undefined;
   let revision = 0;
   let run = 0;
@@ -75,7 +75,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     visible = false;
     selected = 0;
     checked.clear();
-    previewText = undefined;
+    preview = undefined;
     ctx.ui.setWidget(WIDGET, undefined);
   }
 
@@ -139,7 +139,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   function render(ctx: ExtensionContext, sample: Sample) {
     const result = sample.result;
     if (!result || result.kind === "none") return;
-    previewText = selectedIndices(result).map(index => result.actions[index].draft).join(" ").replace(/\s+/g, " ");
+    preview = [selectedIndices(result).map(index => result.actions[index].draft).join(" ").replace(/\s+/g, " ")];
     if (result.kind === "single") {
       ctx.ui.setWidget(WIDGET, [ctx.ui.theme.fg("muted", "下一步建议 · Enter 发送 · Tab 填入输入框 · Esc 忽略")], { placement: "aboveEditor" });
     } else {
@@ -284,15 +284,15 @@ export default function nextStep(pi: ExtensionAPI, timing = {
           if (failed || component !== editor) return;
           try {
             restorePrediction?.();
-            // Native setup assigns prediction after the factory returns; compose with that owner.
-            const previousPrediction = component.prediction;
-            const prediction = () => {
-              if (enabled && visible && !failed && context && available(context)) return previewText;
-              return previousPrediction?.();
+            // Native setup assigns predictions after the factory returns; compose with that owner.
+            const previousPredictions = component.predictions;
+            const predictions = () => {
+              if (enabled && visible && !failed && context && available(context)) return preview;
+              return previousPredictions?.();
             };
-            component.prediction = prediction;
+            component.predictions = predictions;
             restorePrediction = () => {
-              if (component.prediction === prediction) component.prediction = previousPrediction;
+              if (component.predictions === predictions) component.predictions = previousPredictions;
             };
           } catch { fail(context ?? ctx); }
         });
@@ -341,7 +341,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
           const index = (["alt+1", "alt+2", "alt+3"] as const).findIndex((key, number) => data === `\x1b${number + 1}` || matchesKey(data, key));
           if (index >= 0 && current?.result?.actions[index]) { accept(ctx, [index]); return { consume: true }; }
         }
-        previewText = undefined;
+        preview = undefined;
         if (current?.pending || scheduled || (visible && current?.result?.kind === "single")) {
           invalidate(ctx, "user input");
           if (current) current.result = undefined;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+
+- Restore next-step ghost text with OMP 18.16.0's native `predictions()` list API. Single recommendations, choice previews, native-completion fallback, and send/fill controls keep their existing behavior.
+- Pin the SDK and CI host to OMP 18.16.0. Support and test only the current pinned OMP release, without older-host compatibility branches or tests.
+
 ## 0.7.2
 
 - Render all grouping statistics, including failure counts, in the theme's `borderMuted` color on light themes; dark themes keep `dim` because `borderMuted` nearly matches their background. `Done` labels and rules are unchanged.

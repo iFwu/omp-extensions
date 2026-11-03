@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-model-switch",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Session-only model switching aliases for OMP",
   "type": "module",
   "license": "MIT",
@@ -31,7 +31,7 @@
     ]
   },
   "peerDependencies": {
-    "@oh-my-pi/pi-coding-agent": "18.13.3"
+    "@oh-my-pi/pi-coding-agent": "18.16.0"
   },
   "peerDependenciesMeta": {
     "@oh-my-pi/pi-coding-agent": {
