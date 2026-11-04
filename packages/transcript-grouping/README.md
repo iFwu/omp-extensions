@@ -19,13 +19,13 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 
 Grouping is on by default. Use `/grouping` or `Ctrl+S` to toggle it independently of tool visibility. Resolve any existing `Ctrl+S` keybinding conflict in your own configuration. State is process-local and does not rewrite historical sessions.
 
-See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
+See the [behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests
 
 `src/index.ts` owns host integration and restoration; `state.ts` tracks timing and boundaries, and `render.ts` formats grouping labels.
 
-After the repository's [development setup](https://github.com/iFwu/omp-extensions#development-and-verification), run from its root:
+After the repository's [development setup](https://git.nice.do/fwu/omp-extensions#development-and-verification), run from its root:
 
 ```sh
 bun run --filter @ifwu/omp-transcript-grouping test

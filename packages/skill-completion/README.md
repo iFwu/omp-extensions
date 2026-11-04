@@ -21,13 +21,13 @@ Native skill discovery and `skills.enableSkillCommands` remain authoritative. Cu
 
 Markdown quotes do not put the draft in command mode. `$`, `¥`, and `￥` can open and filter skills after a quote followed by a blank line; selection preserves the quoted context, line breaks, and arguments.
 
-See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
+See the [behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests
 
 The single `src/index.ts` contains token detection and the native autocomplete adapter.
 
-After the repository's [development setup](https://github.com/iFwu/omp-extensions#development-and-verification), run from its root:
+After the repository's [development setup](https://git.nice.do/fwu/omp-extensions#development-and-verification), run from its root:
 
 ```sh
 bun run --filter @ifwu/omp-skill-completion test

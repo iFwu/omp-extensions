@@ -7,12 +7,12 @@
   "author": "iFwu",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iFwu/omp-extensions.git",
+    "url": "git+https://git.nice.do/fwu/omp-extensions.git",
     "directory": "packages/model-switch"
   },
-  "homepage": "https://github.com/iFwu/omp-extensions/tree/main/packages/model-switch",
+  "homepage": "https://git.nice.do/fwu/omp-extensions/src/branch/main/packages/model-switch",
   "bugs": {
-    "url": "https://github.com/iFwu/omp-extensions/issues"
+    "url": "https://git.nice.do/fwu/omp-extensions/issues"
   },
   "files": [
     "src",

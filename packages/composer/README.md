@@ -17,13 +17,13 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 
 ## Behavior
 
-The input editor and status line are native OMP; this package registers no composer shape and writes no configuration. See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
+The input editor and status line are native OMP; this package registers no composer shape and writes no configuration. See the [behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests
 
 `src/index.ts` coordinates registration and lifecycle. `queue.ts` owns queue decoration and rollback, and `activity.ts` owns working intent and timing.
 
-After the repository's [development setup](https://github.com/iFwu/omp-extensions#development-and-verification), run from its root:
+After the repository's [development setup](https://git.nice.do/fwu/omp-extensions#development-and-verification), run from its root:
 
 ```sh
 bun run --filter @ifwu/omp-composer test

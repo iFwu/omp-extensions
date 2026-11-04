@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Move the canonical repository, Git installation examples, package metadata, contributions, and issue tracker to [Forgejo](https://git.nice.do/fwu/omp-extensions). Keep version `0.8.0` and existing release tags unchanged; retain the existing GitHub copy without promising automatic synchronization.
+- Document the retained GitHub verification workflow and the separate Forgejo runner/workflow setup required for equivalent Linux/macOS automation.
+
 ## 0.8.0
 
 - Restore next-step ghost text with OMP 18.16.0's native `predictions()` list API. Single recommendations, choice previews, native-completion fallback, and send/fill controls keep their existing behavior.

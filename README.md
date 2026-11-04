@@ -2,6 +2,8 @@
 
 Seven portable display, input, optional next-step, and session-secret extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed. The optional secret extension is included since `v0.5.0`.
 
+The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). The existing GitHub repository is retained as a historical copy; automatic synchronization is not promised.
+
 ## Compatibility
 
 This package requires **OMP 18.16.0**; development and CI use the **18.16.0 SDK** and Bun **1.4.4**. Only the current pinned OMP release is supported and tested; older-host compatibility is not maintained. OMP standalone supplies its own Bun runtime and host modules. The extensions import internal OMP UI components and patch existing UI behavior; re-run the real-runtime tests before changing the host version. Session secrets use the native masked-input API introduced in 18.13.3.
@@ -11,9 +13,11 @@ This package requires **OMP 18.16.0**; development and CI use the **18.16.0 SDK*
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install github:iFwu/omp-extensions#v0.8.0
+omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.8.0
 omp plugin doctor
 ```
+
+The Forgejo instance requires Git authentication even for this public repository. Reuse your existing host-scoped Git credential helper for `git.nice.do`; the installation process must inherit access to that helper, including when using an isolated HOME. Keep tokens out of installation URLs and package manifests. Enter `@v0.8.0` in the CLI so OMP recognizes the pinned ref; OMP converts it to Bun's `#v0.8.0` form, which may appear in the installed plugin's `package.json`.
 
 All packages share one version and repository-wide release tag. Package names are metadata, not a claim that the suite or individual packages have been published to npm. Start a new OMP process after installing or changing extensions.
 
@@ -35,7 +39,7 @@ The root manifest explicitly registers each workspace's `src/index.ts`. Workspac
 | [next-step](packages/next-step/README.md) | Optional ghost drafts and single/multiple choice cards, explicit send/fill controls, and private local feedback; disabled until configured. |
 | [secret](packages/secret/README.md) | On-demand masked credential requests, session-memory references, and foreground Bash injection; disabled until configured. |
 
-See [Behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for lifecycle, completion boundaries, native-input preservation, and failure isolation.
+See [Behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for lifecycle, completion boundaries, native-input preservation, and failure isolation.
 
 ### Selecting extensions
 
@@ -49,7 +53,7 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.8.0 --single-branch https://github.com/iFwu/omp-extensions.git omp-extensions-v0.8.0
+git clone --branch v0.8.0 --single-branch https://git.nice.do/fwu/omp-extensions.git omp-extensions-v0.8.0
 omp plugin install ./omp-extensions-v0.8.0/packages/skill-completion
 omp plugin doctor
 ```
@@ -62,7 +66,7 @@ Install **either** the suite **or** the standalone package. For the standalone o
 
 ```sh
 # Suite
-omp plugin install github:iFwu/omp-extensions#v0.8.0
+omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.8.0
 omp plugin config set @ifwu/omp-extensions secret true
 omp plugin config get @ifwu/omp-extensions secret --json
 
@@ -102,9 +106,9 @@ The tests exercise real OMP processes against loopback HTTP fixtures, including 
 
 The package smoke checks and installs the root tarball and every standalone workspace tarball in separate temporary environments, runs native doctor, and completes an RPC fixture turn for each. It verifies that declared entry files and licenses ship and tests, development tooling, and dependencies do not leak into the payload. For the suite and secret package it also checks default-off configuration, persists explicit opt-in through native plugin configuration, reads it back in a separate process, and observes the short discovery hint in a fresh fixture turn. It uses no real credentials. This complements rather than replaces the TUI tests. Temporary HOME/XDG/config/session state isolates checks from personal plugins, credentials, and production configuration. `OMP_BIN` must identify the real standalone executable; wrappers that inject personal settings are outside this isolation contract.
 
-For Git transport verification, run `python3 scripts/smoke-package.py --git-source github:iFwu/omp-extensions#<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes.
+For Git transport verification, run `python3 scripts/smoke-package.py --git-source git+https://git.nice.do/fwu/omp-extensions.git@<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes. Use `@<ref>` for this generic Git host so OMP records the installation as pinned; the installer converts it to Bun's Git ref syntax.
 
-GitHub Actions runs the complete suite asynchronously for pull requests, `main` pushes, and manual dispatches on Linux and macOS. Independent matrix slices run each workspace's tests, cross-feature integration, and typecheck/package smoke; typechecking and package smoke run once per OS, not in every workspace slice. Official release binaries are checked against that release's `SHA256SUMS.txt`. Full CI is **not a prerequisite for tagging or publishing** after the affected local checks pass, and tag pushes do not duplicate the matrix. A failing slice stays failed and does not cancel the other slices; failures are neither silently retried nor suppressed. Superseded runs of the same event/ref are cancelled to avoid redundant work. Review asynchronous failures and report them for investigation rather than treating a release as proof that the full suite passed. These checks use no model credentials and make no live-model calls; they validate integration and deterministic behavior, **not real-model response quality**.
+The retained `.github/workflows/verify.yml` describes the GitHub-copy verification matrix: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. It downloads official OMP binaries from upstream GitHub and verifies their release checksums. Forgejo pushes and pull requests require separately provisioned Forgejo runners and a validated workflow; this repository does not yet declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review any available asynchronous CI failures.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
 
@@ -129,7 +133,7 @@ Feature implementation and its tests live in `packages/<feature>/src` and `packa
 
 Composer separates input rendering, queue decoration, and activity timing. Grouping owns its state and label renderer. Small single-purpose extensions stay in one implementation file; no shared runtime framework or cross-package source imports are required.
 
-Keep the root and all workspace versions aligned, commit the single `bun.lock`, and publish one repository-wide tag at the exact commit whose affected local tests, typecheck, and relevant package smoke passed. Push that commit to `main` so the full Linux/macOS matrix runs asynchronously; do not wait for its completion before tagging or publishing. Keep CI failures visible for investigation. The root tarball contains the feature sources directly, without workspace dependency links or a separate build step. Independent npm publication is a separate distribution action, not implied by the workspace layout.
+Keep the root and all workspace versions aligned, commit the single `bun.lock`, and publish one repository-wide tag at the exact commit whose affected local tests, typecheck, and relevant package smoke passed. Push the commit and tag to the canonical [Forgejo repository](https://git.nice.do/fwu/omp-extensions). Keep existing release tags unchanged; the hosting migration retains version `0.8.0`. Full CI is not a prerequisite for tagging or publishing after affected local checks pass. Keep available CI failures visible for investigation. The root tarball contains the feature sources directly, without workspace dependency links or a separate build step. Independent npm publication is a separate distribution action, not implied by the workspace layout.
 
 
 ## Contributing

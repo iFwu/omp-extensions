@@ -19,13 +19,13 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 
 The historical `dotfiles.ask-history` message type remains unchanged. When native tool results are visible, the extra display yields to them to avoid duplicates. Old sessions without these records are not rewritten.
 
-See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
+See the [behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests
 
 The single `src/index.ts` implements recording, native rendering, and plain-text fallback.
 
-After the repository's [development setup](https://github.com/iFwu/omp-extensions#development-and-verification), run from its root:
+After the repository's [development setup](https://git.nice.do/fwu/omp-extensions#development-and-verification), run from its root:
 
 ```sh
 bun run --filter @ifwu/omp-ask-history test

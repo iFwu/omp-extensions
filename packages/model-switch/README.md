@@ -19,13 +19,13 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 
 Bare `/model` and `/models` retain the native management UI. Model roles, provider configuration, service tiers, and credentials are not changed.
 
-See the [behavior contracts](https://github.com/iFwu/omp-extensions/blob/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
+See the [behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 
 ## Source and tests
 
 The single `src/index.ts` normalizes the input command and registers the input transform.
 
-After the repository's [development setup](https://github.com/iFwu/omp-extensions#development-and-verification), run from its root:
+After the repository's [development setup](https://git.nice.do/fwu/omp-extensions#development-and-verification), run from its root:
 
 ```sh
 bun run --filter @ifwu/omp-model-switch test
