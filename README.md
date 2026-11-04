@@ -2,7 +2,7 @@
 
 Seven portable display, input, optional next-step, and session-secret extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed. The optional secret extension is included since `v0.5.0`.
 
-The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). The existing GitHub repository is retained as a historical copy; automatic synchronization is not promised.
+The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). GitHub is a downstream Git mirror, synchronized by Forgejo every 24 hours with sync-on-commit disabled. Development, installation, and deployment do not wait for that mirror. The mirror uses a repository-scoped write-enabled deploy key, not a personal account key or token; Git mirroring does not copy issues or release metadata back to GitHub.
 
 ## Compatibility
 
@@ -108,7 +108,7 @@ The package smoke checks and installs the root tarball and every standalone work
 
 For Git transport verification, run `python3 scripts/smoke-package.py --git-source git+https://git.nice.do/fwu/omp-extensions.git@<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes. Use `@<ref>` for this generic Git host so OMP records the installation as pinned; the installer converts it to Bun's Git ref syntax.
 
-The retained `.github/workflows/verify.yml` describes the GitHub-copy verification matrix: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. It downloads official OMP binaries from upstream GitHub and verifies their release checksums. Forgejo pushes and pull requests require separately provisioned Forgejo runners and a validated workflow; this repository does not yet declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review any available asynchronous CI failures.
+The retained `.github/workflows/verify.yml` runs against the delayed GitHub mirror: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. It downloads official OMP binaries from upstream GitHub and verifies their release checksums. Forgejo pushes and pull requests do not start that workflow; this repository does not declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review asynchronous mirror CI failures when available.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
 

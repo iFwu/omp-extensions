@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Move the canonical repository, Git installation examples, package metadata, contributions, and issue tracker to [Forgejo](https://git.nice.do/fwu/omp-extensions). Keep version `0.8.0` and existing release tags unchanged; retain the existing GitHub copy without promising automatic synchronization.
+- Move the canonical repository, Git installation examples, package metadata, contributions, and issue tracker to [Forgejo](https://git.nice.do/fwu/omp-extensions). Keep version `0.8.0` and existing release tags unchanged. Forgejo pushes Git refs to the existing GitHub mirror every 24 hours with a repository-scoped deploy key; sync-on-commit is disabled.
 - Document the retained GitHub verification workflow and the separate Forgejo runner/workflow setup required for equivalent Linux/macOS automation.
 
 ## 0.8.0
