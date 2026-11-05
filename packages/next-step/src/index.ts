@@ -3,10 +3,10 @@ import { dirname, join, resolve } from "node:path";
 import { completeSimple, Effort } from "@oh-my-pi/pi-ai";
 import type { AgentEndEvent, ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { getPluginSettings } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
-import { matchesKey, truncateToWidth, type TUI } from "@oh-my-pi/pi-tui";
+import { matchesKey, type TUI } from "@oh-my-pi/pi-tui";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { appendFeedback, type FeedbackEvent } from "./feedback";
-import { choiceRows } from "./cards";
+import { suggestionRows, targetIndices } from "./cards";
 import { GATE_THRESHOLD, gateModel, suggestProbability } from "./gate";
 import { summarizeError } from "./errors";
 import { buildContext, parseSuggestion, PROMPT_VERSION, SYSTEM_PROMPT, type Suggestion } from "./suggestion";
@@ -49,7 +49,6 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   let visible = false;
   let selected = 0;
   const checked = new Set<number>();
-  let preview: string[] | undefined;
   let picker: AbortController | undefined;
   // Ctrl+Enter confirmed the open picker: send the filled draft instead of only filling it.
   let pickSend = false;
@@ -62,7 +61,6 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   let tui: TUI | undefined;
   let unsubscribe: (() => void) | undefined;
   let restoreEditor: (() => void) | undefined;
-  let restorePrediction: (() => void) | undefined;
 
   function record(sample: Sample, event: FeedbackEvent) {
     if (!dataEnabled || dataFailed || !sample.file || !sample.directory) return;
@@ -78,7 +76,6 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     visible = false;
     selected = 0;
     checked.clear();
-    preview = undefined;
     ctx.ui.setWidget(WIDGET, undefined);
   }
 
@@ -111,7 +108,6 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     picker?.abort();
     clearTimeout(scheduled);
     unsubscribe?.();
-    restorePrediction?.();
     restoreEditor?.();
     try { hide(ctx); ctx.ui.notify("下一步建议因界面异常已停用；输入和对话不受影响，重启 OMP 后恢复。", "warning"); }
     catch { console.error("[next-step] UI disabled after an error"); }
@@ -127,13 +123,6 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     return ownsInput(ctx) && ctx.ui.getEditorText().length === 0;
   }
 
-  function selectedIndices(result: Suggestion): number[] {
-    if (result.kind === "single") return [0];
-    return result.kind === "choice" && result.selectionMode === "multiple" && checked.size
-      ? result.actions.flatMap((_action, index) => checked.has(index) ? [index] : [])
-      : [selected];
-  }
-
   function dismiss(ctx: ExtensionContext) {
     invalidate(ctx, "dismissed");
     if (current) current.result = undefined;
@@ -142,32 +131,22 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   function render(ctx: ExtensionContext, sample: Sample) {
     const result = sample.result;
     if (!result || result.kind === "none") return;
-    preview = [selectedIndices(result).map(index => result.actions[index].draft).join(" ").replace(/\s+/g, " ")];
-    if (result.kind === "single") {
-      // Typing hides the ghost without discarding it; an empty editor shows it again.
-      ctx.ui.setWidget(WIDGET, (_tui, theme) => ({
-        render: width => [truncateToWidth(theme.fg("muted", ctx.ui.getEditorText().length > 0
-          ? "下一步建议已隐藏 · 清空输入框恢复 · Esc 忽略"
-          : "下一步建议 · Enter 发送 · Tab 填入输入框 · Esc 忽略"), width)],
-        invalidate: () => {},
-      }), { placement: "aboveEditor" });
-    } else {
-      const chosen = selected;
-      const marked = new Set(checked);
-      ctx.ui.setWidget(WIDGET, (_tui, theme) => {
-        let cached: { width: number; editing: boolean; rows: string[] } | undefined;
-        return {
-          render: width => {
-            const editing = ctx.ui.getEditorText().length > 0;
-            if (!cached || cached.width !== width || cached.editing !== editing) {
-              cached = { width, editing, rows: choiceRows(theme, result, chosen, marked, editing, width) };
-            }
-            return cached.rows;
-          },
-          invalidate: () => { cached = undefined; },
-        };
-      }, { placement: "aboveEditor" });
-    }
+    const chosen = selected;
+    const marked = new Set(checked);
+    // Cards stay as read-only reference while typing; keys act on them again once the editor is empty.
+    ctx.ui.setWidget(WIDGET, (_tui, theme) => {
+      let cached: { width: number; editing: boolean; rows: string[] } | undefined;
+      return {
+        render: width => {
+          const editing = ctx.ui.getEditorText().length > 0;
+          if (!cached || cached.width !== width || cached.editing !== editing) {
+            cached = { width, editing, rows: suggestionRows(theme, result, chosen, marked, editing, width) };
+          }
+          return cached.rows;
+        },
+        invalidate: () => { cached = undefined; },
+      };
+    }, { placement: "aboveEditor" });
     visible = true;
     if (!sample.displayed) {
       sample.displayed = true;
@@ -315,22 +294,6 @@ export default function nextStep(pi: ExtensionAPI, timing = {
         tui = host;
         const component = previous ? previous(host, theme, keys) : new CustomEditor(host, theme, keys);
         editor = component;
-        queueMicrotask(() => {
-          if (failed || component !== editor) return;
-          try {
-            restorePrediction?.();
-            // Native setup assigns predictions after the factory returns; compose with that owner.
-            const previousPredictions = component.predictions;
-            const predictions = () => {
-              if (enabled && visible && !failed && context && available(context)) return preview;
-              return previousPredictions?.();
-            };
-            component.predictions = predictions;
-            restorePrediction = () => {
-              if (component.predictions === predictions) component.predictions = previousPredictions;
-            };
-          } catch { fail(context ?? ctx); }
-        });
         const original = component.handleInput;
         component.handleInput = data => {
           original.call(component, data);
@@ -375,7 +338,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
             return { consume: true };
           }
           if (result && (matchesKey(data, "tab") || matchesKey(data, "right") || matchesKey(data, "enter"))) {
-            accept(ctx, selectedIndices(result));
+            accept(ctx, targetIndices(result, selected, checked));
             return matchesKey(data, "enter") ? undefined : { consume: true };
           }
           if (data === "\x1b/" || matchesKey(data, "alt+/")) { void choose(ctx); return { consume: true }; }
@@ -432,7 +395,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   pi.on("session_branch", afterSessionChange);
   pi.on("session_tree", afterSessionChange);
   pi.on("session_shutdown", (_event, ctx) => {
-    try { end(ctx, "session shutdown"); } finally { unsubscribe?.(); restorePrediction?.(); restoreEditor?.(); }
+    try { end(ctx, "session shutdown"); } finally { unsubscribe?.(); restoreEditor?.(); }
   });
   pi.registerCommand("next-step", {
     description: "Optional next-step drafts: on|off|status|model <selector>|effort <level>|data on|off|pick",

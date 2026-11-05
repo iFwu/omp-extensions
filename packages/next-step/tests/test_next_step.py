@@ -334,39 +334,38 @@ class NextStepTUITests(unittest.TestCase):
                 # Stop each independent first-turn session before starting another.
                 self.doCleanups()
 
-    def test_single_ghost_tab_right_accept_and_enter_sends_once(self):
+    def test_single_card_tab_right_accept_and_enter_sends_once(self):
         session = NativeSession(self, delayed_input=True)
         draft = preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"]
         for key in ("\t", "\x1b[C"):
             session.ready()
-            session.wait(lambda: draft in session.rows(), "visible ghost inside native editor")
-            session.expect_draft("")
+            session.wait(lambda: draft in "\n".join(session.widget()), "single draft previewed in the card")
+            self.assertNotIn(draft, session.state().get("text", ""), "No ghost or editor text before adoption")
             count = len(session.requests())
             session.send(key)
             session.expect_draft(draft)
-            self.assertEqual(len(session.requests()), count, "Tab/Right only adopts the ghost")
+            self.assertEqual(len(session.requests()), count, "Tab/Right only adopts the draft")
             session.clear()
         session.ready()
         count = len(session.requests())
         session.send("\r")
         session.event("submitted", predicate=lambda event: event["outcome"] == "accepted" and event["text"] == draft)
-        session.wait(lambda: len(session.requests()) == count + 1, "Enter sends ghost through native submit")
+        session.wait(lambda: len(session.requests()) == count + 1, "Enter sends the draft through native submit")
         self.assertIn(draft, json.dumps(session.requests()[-1], ensure_ascii=False))
         session.event("generated", after=3)
-        self.assertEqual(len(session.requests()), count + 1, "Ghost Enter submits exactly once")
+        self.assertEqual(len(session.requests()), count + 1, "Card Enter submits exactly once")
 
-    def test_typing_hides_single_ghost_and_empty_editor_restores_it(self):
+    def test_typing_keeps_single_card_and_empty_editor_reenables_it(self):
         session = NativeSession(self)
         draft = preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"]
         session.ready()
-        session.wait(lambda: draft in session.rows(), "visible ghost")
         session.send("验证")
         session.expect_draft("验证")
-        session.wait(lambda: draft not in session.rows(), "ghost hidden while typing")
-        session.wait(lambda: "清空输入框恢复" in "\n".join(session.widget()), "hidden-suggestion hint")
+        session.wait(lambda: "输入框内容原样发送" in "\n".join(session.widget()), "read-only card while typing")
+        self.assertNotIn(draft, "\n".join(session.widget()), "Draft preview hides while typing")
         session.send("\x7f\x7f")
         session.expect_draft("")
-        session.wait(lambda: draft in session.rows(), "ghost restored on empty editor")
+        session.wait(lambda: draft in "\n".join(session.widget()), "draft preview back on empty editor")
         self.assertEqual(session.events("dismissed"), [], "Typing alone must not discard the suggestion")
         count = len(session.requests())
         session.send("\t")
