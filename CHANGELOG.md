@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+
+- Render a single next-step recommendation as a card above the composer, like choices, instead of editor ghost text. Next-step no longer writes into the editor's prediction slot. Cards preview up to three lines of the draft Enter would send, stay visible as read-only reference while typing, and accept keys again once the composer is empty.
+
 ## 0.10.0
 
 - Keep a single next-step ghost draft while typing: it hides, the hint line says so, and deleting back to an empty composer shows it again. Only Escape, submission, or a turn/session boundary discards it.
