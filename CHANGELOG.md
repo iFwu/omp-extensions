@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 - Keep a single next-step ghost draft while typing: it hides, the hint line says so, and deleting back to an empty composer shows it again. Only Escape, submission, or a turn/session boundary discards it.
 - Add Ctrl+Enter to the `Alt+/` and `/next-step pick` selector: it fills the highlighted draft and submits it once through the native input path. Enter still only fills.
