@@ -355,27 +355,24 @@ class NextStepTUITests(unittest.TestCase):
         session.event("generated", after=3)
         self.assertEqual(len(session.requests()), count + 1, "Ghost Enter submits exactly once")
 
-    def test_typing_dismisses_single_ghost_without_revival(self):
+    def test_typing_hides_single_ghost_and_empty_editor_restores_it(self):
         session = NativeSession(self)
         draft = preview.FIXTURES["ready"]["suggestion"]["actions"][0]["draft"]
         session.ready()
+        session.wait(lambda: draft in session.rows(), "visible ghost")
         session.send("验证")
         session.expect_draft("验证")
-        self.assertNotIn(draft, session.rows())
-        session.expect_no_suggestion()
-        session.clear()
-        session.drain(0.2)
-        session.expect_no_suggestion()
+        session.wait(lambda: draft not in session.rows(), "ghost hidden while typing")
+        session.wait(lambda: "清空输入框恢复" in "\n".join(session.widget()), "hidden-suggestion hint")
+        session.send("\x7f\x7f")
+        session.expect_draft("")
+        session.wait(lambda: draft in session.rows(), "ghost restored on empty editor")
+        self.assertEqual(session.events("dismissed"), [], "Typing alone must not discard the suggestion")
+        count = len(session.requests())
         session.send("\t")
-        session.expect_draft("")
-        session.send("/next-step pick\r")
-        session.expect_draft("")
-        session.drain(0.3)
-        self.assertTrue(session.state().get("editorFocused"))
-        self.assertFalse(session.state().get("overlay"))
-        session.expect_no_suggestion()
-        self.assertEqual(len(session.requests()), 1)
-        self.assertEqual(session.events("accepted"), [])
+        session.expect_draft(draft)
+        self.assertEqual(session.event("accepted")["draft"], draft)
+        self.assertEqual(len(session.requests()), count)
 
     def test_default_first_choice_enter_sends_once_without_default_checks(self):
         for scene in ("decision", "maintenance"):
@@ -780,6 +777,23 @@ class NextStepTUITests(unittest.TestCase):
         session.expect_draft(draft)
         session.event("accepted")
         self.assertEqual(len(session.requests()), count, "Picker acceptance must not submit the draft")
+
+    def test_pick_ctrl_enter_sends_highlighted_draft_once(self):
+        session = NativeSession(self)
+        session.ready("decision")
+        count = len(session.requests())
+        session.send("\x1b/")
+        session.wait(lambda: session.state().get("overlay") or not session.state().get("editorFocused"),
+                     "native next-step picker")
+        session.send("\x1b[B")
+        session.send("\x1b[13;5u")
+        draft = preview.FIXTURES["decision"]["suggestion"]["actions"][1]["draft"]
+        self.assertEqual(session.event("accepted")["indices"], [1])
+        session.event("submitted", predicate=lambda event: event["outcome"] == "accepted" and event["text"] == draft)
+        session.wait(lambda: len(session.requests()) == count + 1, "Ctrl+Enter sends through native submit")
+        self.assert_submission_payload(session, "decision", draft)
+        session.drain(0.5)
+        self.assertEqual(len(session.requests()), count + 1, "Picker send submits exactly once")
 
     def test_native_file_slash_and_skill_tab_completion(self):
         session = NativeSession(self)

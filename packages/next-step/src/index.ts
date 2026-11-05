@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { completeSimple, Effort } from "@oh-my-pi/pi-ai";
 import type { AgentEndEvent, ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { getPluginSettings } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
-import { matchesKey, type TUI } from "@oh-my-pi/pi-tui";
+import { matchesKey, truncateToWidth, type TUI } from "@oh-my-pi/pi-tui";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { appendFeedback, type FeedbackEvent } from "./feedback";
 import { choiceRows } from "./cards";
@@ -51,6 +51,8 @@ export default function nextStep(pi: ExtensionAPI, timing = {
   const checked = new Set<number>();
   let preview: string[] | undefined;
   let picker: AbortController | undefined;
+  // Ctrl+Enter confirmed the open picker: send the filled draft instead of only filling it.
+  let pickSend = false;
   let revision = 0;
   let run = 0;
   let scheduledRun = -1;
@@ -142,7 +144,13 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     if (!result || result.kind === "none") return;
     preview = [selectedIndices(result).map(index => result.actions[index].draft).join(" ").replace(/\s+/g, " ")];
     if (result.kind === "single") {
-      ctx.ui.setWidget(WIDGET, [ctx.ui.theme.fg("muted", "下一步建议 · Enter 发送 · Tab 填入输入框 · Esc 忽略")], { placement: "aboveEditor" });
+      // Typing hides the ghost without discarding it; an empty editor shows it again.
+      ctx.ui.setWidget(WIDGET, (_tui, theme) => ({
+        render: width => [truncateToWidth(theme.fg("muted", ctx.ui.getEditorText().length > 0
+          ? "下一步建议已隐藏 · 清空输入框恢复 · Esc 忽略"
+          : "下一步建议 · Enter 发送 · Tab 填入输入框 · Esc 忽略"), width)],
+        invalidate: () => {},
+      }), { placement: "aboveEditor" });
     } else {
       const chosen = selected;
       const marked = new Set(checked);
@@ -168,15 +176,16 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     outcome = "shown";
   }
 
-  function accept(ctx: ExtensionContext, indices: number[]) {
+  function accept(ctx: ExtensionContext, indices: number[]): boolean {
     const sample = current;
     const result = sample?.result;
-    if (!sample || !result || sample.session !== ctx.sessionManager.getSessionId() || !available(ctx)) return;
+    if (!sample || !result || sample.session !== ctx.sessionManager.getSessionId() || !available(ctx)) return false;
     const draft = indices.map(index => result.actions[index].draft).join("\n\n");
     invalidate(ctx, "accepted into draft");
     ctx.ui.setEditorText(draft);
     sample.accepted = draft;
     record(sample, { type: "accepted", indices, draft });
+    return true;
   }
 
   async function choose(ctx: ExtensionContext) {
@@ -185,15 +194,21 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     const captured = revision;
     const controller = new AbortController();
     picker = controller;
+    pickSend = false;
     try {
       const options = sample.result.actions.map((action, index) => ({ label: `${index + 1}. ${action.title}`, description: action.draft }));
-      const selected = await ctx.ui.select(`${sample.result.question || "下一步"} · 选中后填入输入框，不发送`, options, { signal: controller.signal });
+      const selected = await ctx.ui.select(`${sample.result.question || "下一步"} · Enter 填入输入框 · Ctrl+Enter 直接发送`, options, { signal: controller.signal });
       if (controller.signal.aborted || captured !== revision || current !== sample) return;
       picker = undefined;
       const index = options.findIndex(option => option.label === selected);
-      if (index >= 0) accept(ctx, [index]);
+      if (index < 0) return;
+      // Native submit path, exactly as if Enter were pressed on the filled draft.
+      if (accept(ctx, [index]) && pickSend) editor?.handleInput("\r");
     } catch { if (!controller.signal.aborted) fail(ctx); }
-    finally { if (picker === controller) picker = undefined; }
+    finally {
+      if (picker === controller) picker = undefined;
+      pickSend = false;
+    }
   }
 
   async function generate(event: AgentEndEvent, ctx: ExtensionContext, captured: number) {
@@ -331,7 +346,13 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     }
     unsubscribe?.();
     unsubscribe = ctx.ui.onTerminalInput(data => {
-      if (failed || !enabled || picker) return undefined;
+      if (failed || !enabled) return undefined;
+      if (picker) {
+        // The native picker reports only the chosen label, so remember the key and confirm it as Enter.
+        if (!matchesKey(data, "ctrl+enter")) return undefined;
+        pickSend = true;
+        return { data: "\r" };
+      }
       if (data === "\x1b[I" || data === "\x1b[O" || /^\x1b\[<\d+;\d+;\d+[Mm]$/.test(data)) return undefined;
       try {
         if ((visible || current?.pending || scheduled) && ownsInput(ctx) && matchesKey(data, "escape")) {
@@ -361,8 +382,7 @@ export default function nextStep(pi: ExtensionAPI, timing = {
           const index = (["alt+1", "alt+2", "alt+3"] as const).findIndex((key, number) => data === `\x1b${number + 1}` || matchesKey(data, key));
           if (index >= 0 && current?.result?.actions[index]) { accept(ctx, [index]); return { consume: true }; }
         }
-        preview = undefined;
-        if (current?.pending || scheduled || (visible && current?.result?.kind === "single")) {
+        if (current?.pending || scheduled) {
           invalidate(ctx, "user input");
           if (current) current.result = undefined;
         }

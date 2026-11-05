@@ -29,7 +29,7 @@ export default function (pi: ExtensionAPI) {
       } else if (kind === "invalid" || kind === "failure") {
         pi.sendUserMessage(`${fixtures.ready.prompt}\n[preview:${kind}]`);
       } else {
-        ctx.ui.notify("/preview scene ready|decision|maintenance|done|blocked · /preview delay 3 · /preview invalid|failure。默认聚焦第一项，不默认勾选；↑↓ 循环移动，只有多选模式且输入框为空、无补全弹窗时可用空格勾选。Enter 发送已勾选项（按原顺序空行拼接），未勾选则发送焦点项；Tab/→ 只填入，不发送，也不额外调用模型。输入时 ghost 消失，选项卡保留但只读，Enter 只发送输入内容。Esc 永久取消建议并保留草稿，原生补全或弹层优先关闭；取消、重启或恢复会话都不恢复旧卡片。Alt+1/2/3 或 /next-step pick 只填入不发送。", "info");
+        ctx.ui.notify("/preview scene ready|decision|maintenance|done|blocked · /preview delay 3 · /preview invalid|failure。默认聚焦第一项，不默认勾选；↑↓ 循环移动，只有多选模式且输入框为空、无补全弹窗时可用空格勾选。Enter 发送已勾选项（按原顺序空行拼接），未勾选则发送焦点项；Tab/→ 只填入，不发送，也不额外调用模型。输入时 ghost 隐藏，清空输入框后恢复；选项卡保留但只读，Enter 只发送输入内容。Esc 永久取消建议并保留草稿，原生补全或弹层优先关闭；取消、重启或恢复会话都不恢复旧卡片。Alt+1/2/3 只填入不发送；Alt+/ 或 /next-step pick 里 Enter 填入，Ctrl+Enter 直接发送。", "info");
       }
     },
   });

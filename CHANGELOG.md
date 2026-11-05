@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Keep a single next-step ghost draft while typing: it hides, the hint line says so, and deleting back to an empty composer shows it again. Only Escape, submission, or a turn/session boundary discards it.
+- Add Ctrl+Enter to the `Alt+/` and `/next-step pick` selector: it fills the highlighted draft and submits it once through the native input path. Enter still only fills.
+- Correct the behavior contract that still said no JEV gate is used.
+
 ## 0.9.0
 
 - Gate next-step generation on the native `judge` role (for example `typesafe/jev-1.14.0`) when it resolves to a native judgment API: generation runs only when the judge gives at least 0.4 probability that the user will approve or pick something the latest answer proposed. Gate errors and its 5-second deadline fail open; a `gated` feedback event records each decision. Without a native judge, behavior is unchanged.
