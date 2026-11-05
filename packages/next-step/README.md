@@ -37,6 +37,8 @@ Generation runs only in the main interactive TUI, after a normal completed answe
 
 The model sees up to two recent real user requests and related completed assistant answers, text only, bounded to 16,000 UTF-16 code units with explicit truncation markers. The latest goal and final answer receive priority. Thinking, tool logs, synthetic users, and custom messages are excluded. This context is sent to the chosen provider; it is not a secret store. The complete generation prompt and its version live in `src/suggestion.ts`.
 
+Before sending the independent request, `onPayload` synchronously emits `omp:before-auxiliary-provider-request` on `pi.events` with a mutable `{ payload, model }` envelope. Host routing extensions can replace `payload` using their normal provider namespace rules; `model` retains the resolved identity. Listeners must finish synchronously. With no listener, the original payload is sent unchanged.
+
 ### Judge gate
 
 When the native `judge` role (for example `typesafe/jev-1.14.0`) resolves first to a native judgment API, the same context is first sent to it as one choice question: will the user's next message approve or pick something the latest answer proposed? Generation proceeds only when the `suggest` probability is at least `0.4`. Text-model judges are not used, because they would add a full model call. Without a native judge the gate is skipped. Gate failures, invalid answers, and its 5-second deadline fail open and run generation as before; cancellation and session changes still stop both steps. Each gate decision records a `gated` event with the judge model, probability, threshold, and latency. The question and threshold live in `src/gate.ts`.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1
+
+- Expose the independent next-step request payload through a synchronous public extension event so host provider routing can apply the same wire-model namespace rules as ordinary turns. Standalone use without a routing listener keeps its original payload.
+
 ## 0.11.0
 
 - Render a single next-step recommendation as a card above the composer, like choices, instead of editor ghost text. Next-step no longer writes into the editor's prediction slot. Cards preview up to three lines of the draft Enter would send, stay visible as read-only reference while typing, and accept keys again once the composer is empty.

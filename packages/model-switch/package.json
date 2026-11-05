@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-model-switch",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Session-only model switching aliases for OMP",
   "type": "module",
   "license": "MIT",

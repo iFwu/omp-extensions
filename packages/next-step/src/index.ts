@@ -243,6 +243,12 @@ export default function nextStep(pi: ExtensionAPI, timing = {
       }, {
         apiKey: ctx.modelRegistry.resolver(model, session), reasoning: model.reasoning ? effort : undefined,
         maxTokens: 2048, signal, statefulResponses: false, storeResponses: false,
+        onPayload: payload => {
+          // Hosts can apply their normal provider routing to this independent request.
+          const request = { payload, model };
+          pi.events.emit("omp:before-auxiliary-provider-request", request);
+          return request.payload;
+        },
       });
       if (sample.controller.signal.aborted || current !== sample || captured !== revision || sample.session !== ctx.sessionManager.getSessionId()) return;
       sample.pending = false;

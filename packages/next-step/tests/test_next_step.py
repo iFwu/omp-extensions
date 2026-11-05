@@ -304,6 +304,32 @@ class NextStepTUITests(unittest.TestCase):
             if action["draft"] not in text:
                 self.assertNotIn(action["draft"], serialized, "Unsubmitted drafts must not enter the main model context")
 
+    def test_auxiliary_payload_transform_routes_real_consumer(self):
+        class RoutedSession(NativeSession):
+            def start(self, command):
+                agent = self.root / "home/.omp/agent"
+                models = json.loads((agent / "models.yml").read_text())
+                models["providers"]["preview-fixture"]["models"][1]["id"] = "unrouted-suggestion"
+                (agent / "models.yml").write_text(json.dumps(models))
+                command[command.index("--next-step-model") + 1] = "preview-fixture/unrouted-suggestion"
+                router = self.root / "auxiliary-router.ts"
+                router.write_text('''
+export default function(pi) {
+ pi.events.on("omp:before-auxiliary-provider-request", request => {
+  if(request.model.provider !== "preview-fixture" || request.model.id !== "unrouted-suggestion") throw new Error("Wrong auxiliary identity");
+  request.payload = {...request.payload, model: "suggestion"};
+ });
+}
+''')
+                command.extend(("-e", str(router)))
+                super().start(command)
+
+        session = RoutedSession(self)
+        session.ready("decision")
+        self.assertEqual(session.event("generated")["model"], "preview-fixture/unrouted-suggestion")
+        self.assertEqual(session.requests(suggestion=True)[0]["model"], "suggestion")
+        session.expect_cards("decision")
+
     def test_first_completion_none_single_choice(self):
         for scene, kind in (("done", "none"), ("ready", "single"), ("decision", "choice"), ("maintenance", "choice")):
             with self.subTest(scene=scene):
