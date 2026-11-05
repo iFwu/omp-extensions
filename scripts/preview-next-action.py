@@ -73,6 +73,9 @@ class FixtureServer(ThreadingHTTPServer):
         self.lock = threading.Lock()
         self.current_control = ("normal", self.delay, None)
         self.request_gates = set()
+        # Probability of "suggest" returned by the loopback judge; "failure" returns HTTP 500.
+        self.judge_answer = 0.9
+        self.judge_requests = []
 
     def next_suggestion(self, mode="normal", delay=None, *, gate=None):
         with self.lock:
@@ -101,6 +104,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path.endswith("/systemone"):
+            self.answer_judge(body)
+            return
         suggestion = body.get("model") == "suggestion"
         if body.get("model") not in ("main", "suggestion"):
             self.send_error(400, "Only local fixture models are allowed")
@@ -161,8 +167,25 @@ class FixtureHandler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def answer_judge(self, body):
+        with self.server.lock:
+            self.server.judge_requests.append(body)
+            answer = self.server.judge_answer
+        if answer == "failure":
+            self.send_error(500, "Injected judge failure")
+            return
+        data = json.dumps({"model": body.get("model"), "usage": {"input_tokens": 0, "output_tokens": 0},
+                           "answers": {"gate": {"type": "choice", "choice": "suggest" if answer >= 0.5 else "skip",
+                                                "confidence": abs(answer - 0.5) * 2,
+                                                "probabilities": {"suggest": answer, "skip": 1 - answer}}}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
-def offline_launch(binary, root, server, *, scene=None, effort="low", extra_extensions=()):
+
+def offline_launch(binary, root, server, *, scene=None, effort="low", extra_extensions=(), judge=False):
     """Build isolated source-run arguments; shared with real TUI regression tests."""
     root = Path(root)
     home = root / "home"
@@ -176,14 +199,23 @@ def offline_launch(binary, root, server, *, scene=None, effort="low", extra_exte
         "completion": {"notify": "off"}, "spelling": {"enabled": False},
         "skills": {"enableSkillCommands": True, "includeSkills": ["fixture-*"]},
     }
-    models = {"providers": {"preview-fixture": {
+    providers = {"preview-fixture": {
         "baseUrl": f"http://127.0.0.1:{server.server_port}/v1", "api": "openai-responses",
         "auth": "apiKey", "apiKey": "local-fixture-only", "models": [
             {"id": model, "name": f"Next Step Fixture {model}", "reasoning": False,
              "input": ["text"], "contextWindow": 100000, "maxTokens": 2048}
             for model in ("main", "suggestion")
         ],
-    }}}
+    }}
+    if judge:
+        # A loopback System One judge; the real TypeSafe route shape, no credentials.
+        providers["preview-judge"] = {
+            "baseUrl": f"http://127.0.0.1:{server.server_port}", "api": "typesafe",
+            "auth": "apiKey", "apiKey": "local-fixture-only",
+            "models": [{"id": "judge", "name": "Next Step Fixture judge", "kind": "judge", "input": ["text"]}],
+        }
+        config["modelRoles"] = {"judge": "preview-judge/judge"}
+    models = {"providers": providers}
     for name, data in (("config.yml", config), ("models.yml", models)):
         (agent / name).write_text(json.dumps(data, ensure_ascii=False))
     env = clean_env(offline=True)

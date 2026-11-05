@@ -1,6 +1,6 @@
 # Next-step
 
-Optional post-answer drafts for OMP 18.16.0. One independent model request after a completed main-agent turn returns `none`, one ghost-text recommendation in the empty composer, or 2–3 action cards above it. No JEV prefilter, periodic polling, tool execution, or extra main-session message from generation. An unresolved Ask remains the main agent's responsibility.
+Optional post-answer drafts for OMP 18.16.0. After a completed main-agent turn, an optional native judge gate decides whether a draft is worth generating; one independent model request then returns `none`, one ghost-text recommendation in the empty composer, or 2–3 action cards above it. No periodic polling, tool execution, or extra main-session message from generation. An unresolved Ask remains the main agent's responsibility.
 
 The feature is **off by default**. Installing the suite alone does not start model calls. Use `/next-step on` for the current process or persist plugin settings. The default selector is `@smol`, with `low` effort; configure a dedicated role to avoid coupling this feature to other background tasks. Role resolution selects the base model; effort is passed separately by this extension.
 
@@ -37,7 +37,13 @@ Generation runs only in the main interactive TUI, after a normal completed answe
 
 The model sees up to two recent real user requests and related completed assistant answers, text only, bounded to 16,000 UTF-16 code units with explicit truncation markers. The latest goal and final answer receive priority. Thinking, tool logs, synthetic users, and custom messages are excluded. This context is sent to the chosen provider; it is not a secret store. The complete generation prompt and its version live in `src/suggestion.ts`.
 
-Only useful optional follow-ups in the latest answer are candidates; earlier turns supply restrictions rather than extra tasks. Completed work, repeated verification, a pause, missing user test results, or unfinished already-requested work should produce `none`. Independent tasks may be combined; ordered steps of one task stay together. Drafts are short requests from the user to the assistant, not instructions for the human, invented user results/preferences, extra planning gates, or detailed implementation briefs. Explicit restrictions and safety prerequisites must survive shortening. These are generation instructions, not semantic phrase filters; the parser enforces structural limits and strict `selectionMode` fields, not factual correctness or the prompt's soft length targets.
+### Judge gate
+
+When the native `judge` role (for example `typesafe/jev-1.14.0`) resolves first to a native judgment API, the same context is first sent to it as one choice question: will the user's next message approve or pick something the latest answer proposed? Generation proceeds only when the `suggest` probability is at least `0.4`. Text-model judges are not used, because they would add a full model call. Without a native judge the gate is skipped. Gate failures, invalid answers, and its 5-second deadline fail open and run generation as before; cancellation and session changes still stop both steps. Each gate decision records a `gated` event with the judge model, probability, threshold, and latency. The question and threshold live in `src/gate.ts`.
+
+Replaying 238 collected samples against `jev-1.14.0` passed 50% of them to generation while keeping all 24 whose next user message was an accepted draft or a short typed approval; the gate adds a median of about 240 ms. Treat this as evidence from one user's data, not a general precision guarantee.
+
+Candidates are actions the latest answer left open for the assistant: an offer or permission request, an unapplied recommendation or proposed change, a diagnosed problem with a stated fix, or options to pick. Earlier turns supply restrictions rather than extra tasks. Completed work with nothing new proposed, pure explanations, human-only steps, and pauses produce `none`; documentation, audits, cleanup, and repeat checks are not invented. One candidate becomes one short approval draft. Options, values, or independent tasks the answer lists for the user to pick stay a choice with the recommended option first, so a different or combined pick remains one keystroke. Drafts are short requests from the user to the assistant, not instructions for the human, invented user results/preferences, or restated implementation plans. Explicit restrictions and safety prerequisites must survive shortening. These are generation instructions, not semantic phrase filters; the parser enforces structural limits and strict `selectionMode` fields, not factual correctness or the prompt's soft length targets.
 
 Input invalidates pending inference, so late responses cannot overwrite drafts or reappear after delete-to-empty. Already-visible choices survive editing until submission, explicit cancellation, or a session/turn boundary. New turns, switching/branching sessions, compaction, disabling the feature, or changing its model clear current results. Provider errors, timeouts, and invalid JSON leave the main conversation usable and permit a later successful turn. Unexpected UI errors disable the enhancement for the rest of the process.
 
@@ -54,6 +60,7 @@ Each event has `schema`, `id`, `at`, and `type`; `id` correlates one generation 
 | Event | Meaning |
 | --- | --- |
 | `requested` | Frozen text context, resolved model, effort, and prompt version. |
+| `gated` | Judge gate decision before generation: judge `model`, `probability` of `suggest`, `threshold`, and `latencyMs`; `error` instead of `probability` when the gate failed open. A probability below the threshold ends the attempt without `generated`. |
 | `generated` | Same evaluation metadata, parsed result (including `none`), and end-to-end generation latency. |
 | `displayed` | The result was actually placed in the visible UI, not merely generated. |
 | `accepted` | The actions named by `indices` were copied to the draft; **not** a final acceptance label. |

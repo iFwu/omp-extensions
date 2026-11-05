@@ -4,6 +4,7 @@ import type { Suggestion, SuggestionContext } from "./suggestion";
 export type FeedbackEvent =
   | { type: "requested"; context: SuggestionContext; model: string; effort: string; promptVersion: string }
   | { type: "generated"; context: SuggestionContext; result: Suggestion; model: string; effort: string; promptVersion: string; latencyMs: number }
+  | { type: "gated"; model: string; threshold: number; latencyMs: number; probability?: number; error?: string }
   | { type: "displayed" }
   | { type: "accepted"; indices: number[]; draft: string }
   | { type: "submitted"; outcome: "accepted" | "edited" | "other"; text: string; displayed: boolean; truncated: boolean }

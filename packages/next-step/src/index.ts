@@ -7,6 +7,7 @@ import { matchesKey, type TUI } from "@oh-my-pi/pi-tui";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { appendFeedback, type FeedbackEvent } from "./feedback";
 import { choiceRows } from "./cards";
+import { GATE_THRESHOLD, gateModel, suggestProbability } from "./gate";
 import { summarizeError } from "./errors";
 import { buildContext, parseSuggestion, PROMPT_VERSION, SYSTEM_PROMPT, type Suggestion } from "./suggestion";
 
@@ -220,6 +221,25 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     outcome = "generating";
     const started = timing.now();
     const signal = AbortSignal.any([sample.controller.signal, timing.timeout(60_000)]);
+    const judge = gateModel(ctx);
+    if (judge) {
+      const gateStarted = timing.now();
+      try {
+        // Fail open: a gate error or timeout must never cost a suggestion.
+        const probability = await suggestProbability(ctx, judge, snapshot, session, AbortSignal.any([signal, timing.timeout(5_000)]));
+        if (sample.controller.signal.aborted || current !== sample || captured !== revision || sample.session !== ctx.sessionManager.getSessionId()) return;
+        const gated = { model: `${judge.provider}/${judge.id}`, probability, threshold: GATE_THRESHOLD, latencyMs: Math.round(timing.now() - gateStarted) };
+        record(sample, { type: "gated", ...gated });
+        if (probability < GATE_THRESHOLD) {
+          sample.pending = false;
+          outcome = "gated";
+          return;
+        }
+      } catch {
+        if (sample.controller.signal.aborted || current !== sample || captured !== revision) return;
+        record(sample, { type: "gated", model: `${judge.provider}/${judge.id}`, threshold: GATE_THRESHOLD, latencyMs: Math.round(timing.now() - gateStarted), error: "gate unavailable" });
+      }
+    }
     let stage: "provider" | "parse" = "provider";
     let stopReason: string | undefined;
     try {

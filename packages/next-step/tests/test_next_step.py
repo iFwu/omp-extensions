@@ -43,7 +43,7 @@ def popup_shows(session, label):
 
 
 class NativeSession:
-    def __init__(self, testcase, persistent=None, delayed_input=False, controlled_time=False):
+    def __init__(self, testcase, persistent=None, delayed_input=False, controlled_time=False, judge=False):
         self.testcase = testcase
         self.directory = tempfile.TemporaryDirectory(prefix="omp-next-step-test-")
         self.root = Path(self.directory.name)
@@ -101,7 +101,7 @@ export default function(pi) {
  pi.on("session_shutdown",()=>clearInterval(timer));
 }
 ''')
-        command, env = preview.offline_launch(OMP_BIN, self.root, self.server, extra_extensions=[observer])
+        command, env = preview.offline_launch(OMP_BIN, self.root, self.server, extra_extensions=[observer], judge=judge)
         if controlled_time:
             source = str(REPO / "packages/next-step/src/index.ts")
             command[command.index(source)] = str(write_next_step_clock(self.root))
@@ -844,6 +844,37 @@ class NextStepTUITests(unittest.TestCase):
         session.send("\x1b1")
         session.expect_draft(preview.FIXTURES["decision"]["suggestion"]["actions"][0]["draft"])
         self.assertEqual(len(session.events()), count)
+
+    def test_judge_gate_skips_passes_and_fails_open(self):
+        session = NativeSession(self, judge=True)
+        for answer, scene, generates in ((0.1, "ready", False), (0.9, "decision", True), ("failure", "ready", True)):
+            with self.subTest(answer=answer):
+                session.server.judge_answer = answer
+                judged = len(session.server.judge_requests)
+                gated = len(session.events("gated"))
+                suggestions = len(session.requests(suggestion=True))
+                displayed = len(session.events("displayed"))
+                session.scene(scene)
+                event = session.event("gated", after=gated)
+                request = session.server.judge_requests[judged]
+                self.assertEqual(request["model"], "judge")
+                self.assertEqual(request["state"], session.events("requested")[-1]["context"])
+                self.assertEqual(event["model"], "preview-judge/judge")
+                self.assertEqual(event["threshold"], 0.4)
+                if answer == "failure":
+                    self.assertNotIn("probability", event)
+                    self.assertIn("error", event)
+                else:
+                    self.assertEqual(event["probability"], answer)
+                if generates:
+                    session.event("displayed", after=displayed)
+                    self.assertEqual(len(session.requests(suggestion=True)), suggestions + 1)
+                    session.clear()
+                else:
+                    session.drain(0.5)
+                    self.assertEqual(len(session.requests(suggestion=True)), suggestions)
+                    self.assertEqual(len(session.events("displayed")), displayed)
+                    session.expect_no_suggestion()
 
 
 if __name__ == "__main__":
