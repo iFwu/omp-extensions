@@ -13,11 +13,11 @@ This package requires **OMP 18.16.0**; development and CI use the **18.16.0 SDK*
 Install the public Git repository through OMP's plugin manager:
 
 ```sh
-omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.8.0
+omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.9.0
 omp plugin doctor
 ```
 
-The Forgejo instance requires Git authentication even for this public repository. Reuse your existing host-scoped Git credential helper for `git.nice.do`; the installation process must inherit access to that helper, including when using an isolated HOME. Keep tokens out of installation URLs and package manifests. Enter `@v0.8.0` in the CLI so OMP recognizes the pinned ref; OMP converts it to Bun's `#v0.8.0` form, which may appear in the installed plugin's `package.json`.
+The Forgejo instance requires Git authentication even for this public repository. Reuse your existing host-scoped Git credential helper for `git.nice.do`; the installation process must inherit access to that helper, including when using an isolated HOME. Keep tokens out of installation URLs and package manifests. Enter `@v0.9.0` in the CLI so OMP recognizes the pinned ref; OMP converts it to Bun's `#v0.9.0` form, which may appear in the installed plugin's `package.json`.
 
 All packages share one version and repository-wide release tag. Package names are metadata, not a claim that the suite or individual packages have been published to npm. Start a new OMP process after installing or changing extensions.
 
@@ -53,8 +53,8 @@ omp plugin enable @ifwu/omp-extensions
 For one feature, install its package from a release checkout instead of enabling the suite:
 
 ```sh
-git clone --branch v0.8.0 --single-branch https://git.nice.do/fwu/omp-extensions.git omp-extensions-v0.8.0
-omp plugin install ./omp-extensions-v0.8.0/packages/skill-completion
+git clone --branch v0.9.0 --single-branch https://git.nice.do/fwu/omp-extensions.git omp-extensions-v0.9.0
+omp plugin install ./omp-extensions-v0.9.0/packages/skill-completion
 omp plugin doctor
 ```
 
@@ -62,16 +62,16 @@ OMP keeps a local link to that package directory: retain the checkout and keep i
 
 ### Session-secret opt-in
 
-Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.8.0` checkout created above:
+Install **either** the suite **or** the standalone package. For the standalone option, retain the `v0.9.0` checkout created above:
 
 ```sh
 # Suite
-omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.8.0
+omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.9.0
 omp plugin config set @ifwu/omp-extensions secret true
 omp plugin config get @ifwu/omp-extensions secret --json
 
 # Alternatively, standalone (do not install alongside the suite)
-omp plugin install ./omp-extensions-v0.8.0/packages/secret
+omp plugin install ./omp-extensions-v0.9.0/packages/secret
 omp plugin config set @ifwu/omp-secret enabled true
 omp plugin config get @ifwu/omp-secret enabled --json
 ```

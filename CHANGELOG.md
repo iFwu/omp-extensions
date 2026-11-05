@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 - Gate next-step generation on the native `judge` role (for example `typesafe/jev-1.14.0`) when it resolves to a native judgment API: generation runs only when the judge gives at least 0.4 probability that the user will approve or pick something the latest answer proposed. Gate errors and its 5-second deadline fail open; a `gated` feedback event records each decision. Without a native judge, behavior is unchanged.
 - Revise the suggestion prompt (`next-step-5`) toward short approvals of what the assistant offered, recommended, or diagnosed. Options the answer lists stay a choice with the recommended option first.
