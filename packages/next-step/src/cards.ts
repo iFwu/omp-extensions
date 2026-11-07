@@ -32,8 +32,7 @@ export function suggestionRows(theme: Pick<Theme, "fg" | "bold">, result: Sugges
     });
   }
   const targets = targetIndices(result, selected, checked);
-  if (!editing) {
-    // The draft Enter would send; joined drafts are separated by blank lines when adopted.
+  if (!choice || !editing) {
     const draft = targets.map(index => result.actions[index].draft).join(" ").replace(/\s+/g, " ");
     const lines = wrapTextWithAnsi(draft, Math.max(1, width - 4));
     const shown = lines.slice(0, DRAFT_ROWS);

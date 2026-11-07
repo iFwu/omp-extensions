@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.2
+
+- Keep the text of a single next-step recommendation visible above the composer while typing. Enter still submits only the text in the composer.
+
 ## 0.11.1
 
 - Expose the independent next-step request payload through a synchronous public extension event so host provider routing can apply the same wire-model namespace rules as ordinary turns. Standalone use without a routing listener keeps its original payload.
