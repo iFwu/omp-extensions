@@ -172,8 +172,12 @@ export default function(pi) {
                 return state["active"] and "fixture-beta" in rows and "fixture-alpha" not in rows
 
             def clear():
-                send("\x1b")
+                if capture()["active"]:
+                    # Encode Escape as a complete key so it cannot prefix Ctrl+U.
+                    send("\x1b[27u")
+                    capture(lambda state: not state["active"])
                 send("\x15")
+                capture(lambda state: state["text"] == "" and not state["active"])
 
             try:
                 wait_for("Skill Fixture")
@@ -219,7 +223,7 @@ export default function(pi) {
                         state = capture()
                         self.assertEqual(state["text"], literal)
                         self.assertFalse(state["active"], state)
-                        clear()
+                    clear()
                 send("/skill:fixture-a")
                 send("\t")
                 self.assertEqual(capture()["text"], "/skill:fixture-alpha ")

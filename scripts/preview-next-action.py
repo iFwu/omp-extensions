@@ -13,6 +13,8 @@ import threading
 import time
 
 REPO = Path(__file__).resolve().parents[1]
+MANIFEST = json.loads((REPO / "package.json").read_text())
+OMP_VERSION = MANIFEST["devDependencies"]["@oh-my-pi/pi-coding-agent"]
 FIXTURES = json.loads(Path(__file__).with_suffix(".fixtures.json").read_text())
 MAIN_MODEL = "preview-fixture/main"
 SUGGESTION_MODEL = "preview-fixture/suggestion"
@@ -28,7 +30,7 @@ def standalone_binary():
             magic = binary.read(4)
         if magic in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe", b"\x7fELF"):
             return candidate
-    raise SystemExit("Set OMP_BIN to the official OMP 18.16.0 standalone binary (not a wrapper).")
+    raise SystemExit(f"Set OMP_BIN to the official OMP {OMP_VERSION} standalone binary (not a wrapper).")
 
 
 def clean_env(*, offline):
@@ -247,12 +249,11 @@ def main():
     args = parser.parse_args()
     binary = standalone_binary()
     version = subprocess.check_output([binary, "--version"], text=True).strip()
-    match = re.fullmatch(r"omp/(\d+)\.(\d+)\.(\d+)(?:[-+].+)?", version)
-    if not match or tuple(map(int, match.groups())) != (18, 16, 0):
-        raise SystemExit(f"OMP 18.16.0 standalone required, got {version}")
+    if not re.fullmatch(rf"omp/{re.escape(OMP_VERSION)}(?:[-+].+)?", version):
+        raise SystemExit(f"OMP {OMP_VERSION} standalone required, got {version}")
     if args.live:
         command = [binary, "--cwd", str(Path.cwd()), "--no-extensions"]
-        entries = json.loads((REPO / "package.json").read_text())["omp"]["extensions"]
+        entries = MANIFEST["omp"]["extensions"]
         for entry in dict.fromkeys([*entries, "packages/next-step/src/index.ts"]):
             command.extend(("-e", str(REPO / entry)))
         command.extend(("--next-step", "--next-step-model", args.model, "--next-step-effort", args.effort))

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Support OMP 18.18.1. CI and the source preview select the runtime from the root SDK pin.
+- Synchronize editor reset in the skill-completion TUI checks and submit next-step fixture prompts directly through the editor.
+- Check composer queue headings against OMP's native handoff: claimed messages leave the queue while requests are still being prepared.
+
 ## 0.11.2
 
 - Keep the text of a single next-step recommendation visible above the composer while typing. Enter still submits only the text in the composer.

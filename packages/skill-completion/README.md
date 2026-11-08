@@ -1,6 +1,6 @@
 # Skill Completion
 
-`@ifwu/omp-skill-completion` · OMP 18.16.0 · MIT
+`@ifwu/omp-skill-completion` · OMP 18.18.1 · MIT
 
 Use `$`, `¥`, or `￥` after a whitespace boundary to discover and select native OMP skills. Selection inserts `/skill:<name>` without submitting the draft.
 

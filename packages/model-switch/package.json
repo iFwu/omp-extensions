@@ -31,7 +31,7 @@
     ]
   },
   "peerDependencies": {
-    "@oh-my-pi/pi-coding-agent": "18.16.0"
+    "@oh-my-pi/pi-coding-agent": "18.18.1"
   },
   "peerDependenciesMeta": {
     "@oh-my-pi/pi-coding-agent": {

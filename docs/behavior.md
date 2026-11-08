@@ -1,12 +1,12 @@
 # Behavior contracts
 
-These contracts apply to the ordinary terminal TUI on OMP 18.16.0, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
+These contracts apply to the ordinary terminal TUI on OMP 18.18.1, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
 
 ## Queue and activity
 
 The input editor and status line are native OMP; this package registers no composer shape.
 
-Queued messages use `STEERING` and `FOLLOW-UP` headings, retain native order and numbering, and appear exactly once whether tools are visible or hidden. Native queue delivery, cancellation, and take-back editing remain unchanged. Long messages keep native truncation and newline indicators.
+Queued messages use `STEERING` and `FOLLOW-UP` headings, retain native order and numbering, and appear exactly once whether tools are visible or hidden. Once OMP claims a message for delivery, the queue shows only the messages still waiting, even if the provider request has not started. Native queue delivery, cancellation, and take-back editing remain unchanged. Long messages keep native truncation and newline indicators.
 
 Working text keeps the native tool-intent message. After one minute it can append elapsed time; a new intent yields precedence for at least 30 seconds. Automatic continuations and background-result waits marked `willContinue` keep the same timing origin, including the wait, without showing a completion. At terminal turn end, a display-only `Worked for …` line shows total duration and local completion time. A new user task submitted while idle starts a fresh span; extension-originated continuation input does not. Switching sessions or shutting down cancels the timer. The package writes none of this text to conversation history or model context.
 

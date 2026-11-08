@@ -6,11 +6,11 @@ The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu
 
 ## Compatibility
 
-This package requires **OMP 18.16.0**; development and CI use the **18.16.0 SDK** and Bun **1.4.4**. Only the current pinned OMP release is supported and tested; older-host compatibility is not maintained. OMP standalone supplies its own Bun runtime and host modules. The extensions import internal OMP UI components and patch existing UI behavior; re-run the real-runtime tests before changing the host version. Session secrets use the native masked-input API introduced in 18.13.3.
+This package requires **OMP 18.18.1**; development and CI use the matching SDK and Bun **1.4.4**. Only the current pinned OMP release is supported and tested; older-host compatibility is not maintained. OMP standalone supplies its own Bun runtime and host modules. The extensions import internal OMP UI components and patch existing UI behavior; re-run the real-runtime tests before changing the host version. Session secrets use the native masked-input API introduced in 18.13.3.
 
 ## Install
 
-Install the public Git repository through OMP's plugin manager:
+Install the public Git repository through OMP's plugin manager. Choose a tag whose own README lists support for your OMP version; the current checkout may target a newer OMP release than the example tag.
 
 ```sh
 omp plugin install git+https://git.nice.do/fwu/omp-extensions.git@v0.11.1
@@ -84,7 +84,7 @@ Use `{{sec:name}}` references only with foreground Bash. Reference-bearing comma
 
 ## Development and verification
 
-Prerequisites: the official OMP **18.16.0 standalone binary**, Bun **1.4.4**, Python **3.12**, uv, and npm (for inspecting the packed distribution).
+Prerequisites: the official OMP standalone binary at the version listed under [Compatibility](#compatibility), Bun **1.4.4**, Python **3.12**, uv, and npm (for inspecting the packed distribution).
 
 Select a candidate host with `OMP_BIN`. Skill-completion fixtures give background skill-description compression its own `smol` model so the foreground request-count assertions still detect duplicate submissions.
 
@@ -108,7 +108,7 @@ The package smoke checks and installs the root tarball and every standalone work
 
 For Git transport verification, run `python3 scripts/smoke-package.py --git-source git+https://git.nice.do/fwu/omp-extensions.git@<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes. Use `@<ref>` for this generic Git host so OMP records the installation as pinned; the installer converts it to Bun's Git ref syntax.
 
-The retained `.github/workflows/verify.yml` runs against the delayed GitHub mirror: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. It downloads official OMP binaries from upstream GitHub and verifies their release checksums. Forgejo pushes and pull requests do not start that workflow; this repository does not declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review asynchronous mirror CI failures when available.
+The retained `.github/workflows/verify.yml` runs against the delayed GitHub mirror: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. It takes the OMP release version from the root `@oh-my-pi/pi-coding-agent` SDK pin and verifies the downloaded binary against the official release checksum. Forgejo pushes and pull requests do not start that workflow; this repository does not declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review asynchronous mirror CI failures when available.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
 
@@ -120,7 +120,7 @@ Run the actual next-step extension without installing or building a package:
 python3 ~/omp-extensions/scripts/preview-next-action.py
 ```
 
-`bun run preview:next-action` is equivalent. Python 3 uses only its stdlib; OMP must be the native 18.16.0 standalone executable (`OMP_BIN` can select it). Offline mode uses separate loopback main/suggestion models in a temporary HOME, configuration, session and feedback directory. It makes no paid model calls and cleans temporary data on exit.
+`bun run preview:next-action` is equivalent. Python 3 uses only its stdlib; OMP must be the native standalone executable at the version pinned in the root manifest (`OMP_BIN` can select it). Offline mode uses separate loopback main/suggestion models in a temporary HOME, configuration, session and feedback directory. It makes no paid model calls and cleans temporary data on exit.
 
 `/preview` selects single/choice/multiple/none scenarios or controlled delays and failures. Single recommendations and choices both render as cards above the composer, stay visible while editing, and preview the Enter target's draft while the editor is empty. Empty-editor cards focus the first action, Up/Down wraps, Space checks combinable tasks, Enter submits the checked/focused drafts, and Tab/Right only fills. Escape cancels without deleting editor text, after native popups close. `Alt+1/2/3` fills only; in the full-text picker Enter fills and Ctrl+Enter sends. No parallel prototype UI or hidden main-agent suggestion context is used.
 
