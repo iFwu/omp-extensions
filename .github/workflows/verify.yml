@@ -2,6 +2,7 @@ name: Verify
 
 on:
   pull_request:
+  # Forgejo publishes main through its push mirror; CI runs on GitHub.
   push:
     branches: [main]
   workflow_dispatch:
