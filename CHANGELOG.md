@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.11.3
 
-- Support OMP 18.18.1. CI and the source preview select the runtime from the root SDK pin.
+- Support OMP 18.18.3. CI and the source preview select the runtime from the root SDK pin.
+- Verify native HTML-form Ask submission, field-by-field RPC answers, and persisted answer rendering after resume. Pre-form history remains readable through the native text fallback.
+- Freeze credential-command process groups before forced termination on timeout, cancellation, or excessive output, preventing waiting shells from continuing when their children stop. Shell cleanup traps do not run on these forced stops.
 - Retry interrupted CI downloads of the pinned OMP release and its checksum before verifying the binary.
 - Synchronize editor reset in the skill-completion TUI checks and submit next-step fixture prompts directly through the editor.
 - Check composer queue headings against OMP's native handoff: claimed messages leave the queue while requests are still being prepared.

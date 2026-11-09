@@ -6,7 +6,7 @@ The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu
 
 ## Compatibility
 
-This package requires **OMP 18.18.1**; development and CI use the matching SDK and Bun **1.4.4**. Only the current pinned OMP release is supported and tested; older-host compatibility is not maintained. OMP standalone supplies its own Bun runtime and host modules. The extensions import internal OMP UI components and patch existing UI behavior; re-run the real-runtime tests before changing the host version. Session secrets use the native masked-input API introduced in 18.13.3.
+This package requires **OMP 18.18.3**; development and CI use the matching SDK and Bun **1.4.4**. Only the current pinned OMP release is supported and tested; older-host compatibility is not maintained. OMP standalone supplies its own Bun runtime and host modules. The extensions import internal OMP UI components and patch existing UI behavior; re-run the real-runtime tests before changing the host version. Session secrets use the native masked-input API introduced in 18.13.3.
 
 ## Install
 

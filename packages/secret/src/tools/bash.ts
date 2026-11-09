@@ -73,7 +73,6 @@ export async function runSecretCommand(
     const chunks: Buffer[] = [];
     let bytes = 0;
     let stopped: string | undefined;
-    let killTimer: NodeJS.Timeout | undefined;
     const killGroup = (sig: NodeJS.Signals) => {
       if (!child.pid) return;
       try { process.kill(-child.pid, sig); }
@@ -82,8 +81,9 @@ export async function runSecretCommand(
     const stop = (reason: string) => {
       if (stopped) return;
       stopped = reason;
-      killGroup("SIGTERM");
-      killTimer = setTimeout(() => killGroup("SIGKILL"), 500);
+      // Freeze every shell before killing its waited children can unblock later commands.
+      killGroup("SIGSTOP");
+      killGroup("SIGKILL");
     };
     const abort = () => stop("cancelled");
     signal?.addEventListener("abort", abort, { once: true });
@@ -98,7 +98,6 @@ export async function runSecretCommand(
     child.stderr.on("data", receive);
     const cleanup = () => {
       clearTimeout(timer);
-      clearTimeout(killTimer);
       if (stopped) killGroup("SIGKILL");
       signal?.removeEventListener("abort", abort);
     };

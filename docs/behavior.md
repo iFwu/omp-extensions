@@ -1,6 +1,6 @@
 # Behavior contracts
 
-These contracts apply to the ordinary terminal TUI on OMP 18.18.1, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
+These contracts apply to the ordinary terminal TUI on OMP 18.18.3, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
 
 ## Queue and activity
 
@@ -30,7 +30,7 @@ Only blocks still in the live viewport can change. Already committed scrollback 
 
 ## Ask history
 
-When tool activity is hidden, Ask questions, options, selected/custom answers, and feedback remain visible through native Ask result rendering. When tool activity is shown, the extra display yields to the native result, so answers appear once. Records persist across session resume under the historical `dotfiles.ask-history` type; that display record is excluded from model context, while the actual tool result remains native.
+When tool activity is hidden, Ask HTML-form field questions and submitted answers remain visible through native Ask result rendering. When tool activity is shown, the extra display yields to the native result, so answers appear once. Records persist across session resume under the historical `dotfiles.ask-history` type; that display record is excluded from model context, while the actual tool result remains native. Pre-form records retain their saved answer text through the native renderer's fallback.
 
 Old sessions without these records are not rewritten. Use the native tool-visibility toggle to inspect their original tool results.
 

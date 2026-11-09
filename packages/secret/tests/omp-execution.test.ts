@@ -56,7 +56,7 @@ describe("OMP credential child processes", () => {
   it("timeout terminates descendants before a delayed side effect", async () => {
     const dir = mkdtempSync(join(tmpdir(), "omp-secret-timeout-"));
     try {
-      const result = await runSecretCommand('(sleep 0.4; touch should-not-exist) & wait', dir, {}, 0.04);
+      const result = await runSecretCommand("trap 'touch should-not-exist' TERM; (sleep 0.4; touch should-not-exist) & wait", dir, {}, 0.04);
       expect(result.stopped).toBe("timed out");
       await Bun.sleep(500);
       expect(existsSync(join(dir, "should-not-exist"))).toBe(false);

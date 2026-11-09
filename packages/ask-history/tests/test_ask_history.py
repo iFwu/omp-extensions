@@ -7,25 +7,45 @@ import os
 from pathlib import Path
 import queue
 import shutil
+import struct
 import subprocess
 import tempfile
 import threading
 import time
 import unittest
 
+import pexpect
+from pexpect.fdpexpect import fdspawn
+import pyte
+
 from test_support import OMP_BIN, extension_path, isolated_env, write_yaml
+
+if os.name == "posix":
+    import fcntl
+    import pty
+    import termios
 
 
 @unittest.skipUnless(OMP_BIN, "OMP is not installed")
 class AskHistoryTests(unittest.TestCase):
     def test_native_answers_survive_resume_without_duplicate_model_context(self):
+        self.exercise_history()
+
+    @unittest.skipUnless(os.name == "posix", "POSIX OMP TUI required")
+    def test_native_form_and_legacy_answers_render_after_resume(self):
+        self.exercise_history(native_form=True)
+
+    def exercise_history(self, native_form=False):
         received = []
-        questions = [
-            {"id": "choice", "question": "Choose the storage mode", "options": [{"label": "Keep"}, {"label": "Change"}]},
-            {"id": "features", "question": "Choose features", "multi": True,
-             "options": [{"label": "Search"}, {"label": "Export"}]},
-            {"id": "feedback", "question": "Add feedback", "options": [{"label": "No changes"}]},
-        ]
+        html = """<form>
+<fieldset><legend>Choose the storage mode</legend>
+<label><input type="radio" name="choice" value="keep" checked>Keep</label>
+<label><input type="radio" name="choice" value="change">Change</label></fieldset>
+<fieldset><legend>Choose features</legend>
+<label><input type="checkbox" name="features" value="search">Search</label>
+<label><input type="checkbox" name="features" value="export">Export</label></fieldset>
+<label>Add feedback<input name="feedback"></label>
+</form>"""
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
@@ -40,7 +60,7 @@ class AskHistoryTests(unittest.TestCase):
                             "arguments": json.dumps({"path": str(root / "ordinary-tool.txt")})}
                 elif number == 2:
                     item = {"id": "fc_ask", "type": "function_call", "call_id": "ask_1", "name": "ask",
-                            "arguments": json.dumps({"questions": questions})}
+                            "arguments": json.dumps({"html": html})}
                 else:
                     item = {"id": "msg_final", "type": "message", "role": "assistant", "status": "completed",
                             "content": [{"type": "output_text", "text": "ASK_HISTORY_DONE", "annotations": []}]}
@@ -151,25 +171,123 @@ class AskHistoryTests(unittest.TestCase):
                             process.wait(timeout=5)
                         process.stdout.close()
 
+            if native_form:
+                legacy = root / "legacy-ask.ts"
+                legacy.write_text('''
+export default function(pi) {
+ pi.registerCommand("legacy-ask", {description:"Restore a pre-form answer fixture", handler:()=>{
+  pi.sendMessage({customType:"dotfiles.ask-history", content:"LEGACY_STORAGE_QUESTION: Archive\\nLEGACY_STORAGE_ANSWER: Preserve",
+   details:{results:[{id:"archive",question:"LEGACY_STORAGE_QUESTION",selectedOptions:["Preserve"]}]}, display:true});
+ }});
+}
+''')
+                command = ["--profile", "default", "--cwd", directory, "--model", "ask-test/ask-model",
+                           "--tools", "read,ask", "--no-extensions", "-e", str(extension_path("ask-history")),
+                           "-e", str(legacy), "--no-skills", "--no-rules", "--no-lsp", "--no-title", "--thinking", "off",
+                           "--session-dir", str(root / "sessions")]
+
+                @contextmanager
+                def terminal(*extra):
+                    master, slave = pty.openpty()
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 120, 0, 0))
+                    try:
+                        process = subprocess.Popen([OMP_BIN, *command, *extra], stdin=slave, stdout=slave, stderr=slave,
+                                                   env={**env, "TERM": "xterm-256color"}, start_new_session=True)
+                    finally:
+                        os.close(slave)
+                    child = fdspawn(master, encoding="utf-8", timeout=15)
+                    screen = pyte.Screen(120, 50)
+                    stream = pyte.Stream(screen)
+
+                    def wait_text(text):
+                        deadline = time.monotonic() + 15
+                        while time.monotonic() < deadline:
+                            if text in "\n".join(screen.display):
+                                return
+                            try:
+                                stream.feed(child.read_nonblocking(65536, timeout=0.1))
+                            except pexpect.TIMEOUT:
+                                pass
+                        self.fail(f"Missing TUI text {text!r}:\n" + "\n".join(screen.display))
+
+                    try:
+                        yield child, wait_text, screen
+                    finally:
+                        if process.poll() is None:
+                            process.terminate()
+                            deadline = time.monotonic() + 5
+                            while process.poll() is None and time.monotonic() < deadline:
+                                try:
+                                    child.read_nonblocking(65536, timeout=0.1)
+                                except pexpect.TIMEOUT:
+                                    pass
+                                except pexpect.EOF:
+                                    break
+                            if process.poll() is None:
+                                process.kill()
+                            process.wait(timeout=5)
+                        child.close()
+
+                with terminal("Read the fixture, ask the questions, then finish.") as (child, wait_text, screen):
+                    wait_text("Submit")
+                    wait_text("Choose the storage mode")
+                    child.send("\t")
+                    child.send(" ")
+                    child.send("\x1b[B")
+                    child.send(" ")
+                    child.send("\t")
+                    child.send("Keep the question visible")
+                    child.send("\t")
+                    child.send("\r")
+                    wait_text("ASK_HISTORY_DONE")
+                    wait_text("Search, Export")
+                    wait_text("Keep the question visible")
+                    self.assertNotIn("ORDINARY_TOOL_OUTPUT", "\n".join(screen.display))
+                    child.send("/legacy-ask\r")
+                    wait_text("LEGACY_STORAGE_ANSWER: Preserve")
+                session_files = list((root / "sessions").rglob("*.jsonl"))
+                self.assertEqual(len(session_files), 1, session_files)
+                session_file = str(session_files[0])
+                with terminal("--resume", session_file) as (_child, wait_text, _screen):
+                    wait_text("LEGACY_STORAGE_ANSWER: Preserve")
+                    wait_text("Search, Export")
+                    wait_text("Keep the question visible")
+                with session(session_file) as (_process, send, _wait_for):
+                    records = [message for message in send("get_messages")["messages"]
+                               if message.get("customType") == "dotfiles.ask-history"]
+                    self.assertEqual(len(records), 2, records)
+                    self.assertEqual(records[0]["details"]["answers"], [
+                        {"name": "choice", "question": "Choose the storage mode", "answer": "Keep"},
+                        {"name": "features", "question": "Choose features", "answer": "Search, Export"},
+                        {"name": "feedback", "question": "Add feedback", "answer": "Keep the question visible"},
+                    ])
+                self.assertEqual(len(received), 3)
+                final_input = received[-1]["input"]
+                self.assertEqual(json.dumps(final_input).count(json.dumps(records[0]["content"])[1:-1]), 1, final_input)
+                return
+
             with session() as (process, send, wait_for):
-                send("set_ask_dialog", enabled=True)
                 send("prompt", message="Read the fixture, ask the questions, then finish.")
-                dialog = wait_for(lambda frame: frame.get("method") == "ask")
-                self.assertEqual(dialog["questions"], questions)
-                process.stdin.write(json.dumps({"type": "extension_ui_response", "id": dialog["id"], "answers": [
-                    {"id": "choice", "selectedOptions": ["Keep"]},
-                    {"id": "features", "selectedOptions": ["Search", "Export"]},
-                    {"id": "feedback", "selectedOptions": [], "customInput": "Keep the question visible"},
-                ]}) + "\n")
-                process.stdin.flush()
+                def answer(method, value):
+                    dialog = wait_for(lambda frame: frame.get("method") == method)
+                    process.stdin.write(json.dumps({"type": "extension_ui_response", "id": dialog["id"],
+                                                    "value": value(dialog) if callable(value) else value}) + "\n")
+                    process.stdin.flush()
+
+                answer("select", "Keep")
+                answer("select", "Search")
+                answer("select", "Export")
+                answer("select", lambda dialog: next(option for option in dialog["options"] if "Done selecting" in option))
+                answer("input", "Keep the question visible")
                 wait_for(lambda frame: frame["type"] == "session_settled")
                 messages = send("get_messages")["messages"]
                 records = [message for message in messages if message.get("customType") == "dotfiles.ask-history"]
                 self.assertEqual(len(records), 1, messages)
-                results = records[0]["details"]["results"]
-                self.assertEqual([result["selectedOptions"] for result in results], [["Keep"], ["Search", "Export"], []])
-                self.assertEqual(results[2]["customInput"], "Keep the question visible")
-                self.assertEqual([result["question"] for result in results], [q["question"] for q in questions])
+                self.assertEqual(records[0]["details"]["answers"], [
+                    {"name": "choice", "question": "Choose the storage mode", "answer": "Keep"},
+                    {"name": "features", "question": "Choose features", "answer": "Search, Export"},
+                    {"name": "feedback", "question": "Add feedback", "answer": "Keep the question visible"},
+                ])
                 self.assertEqual(len(received), 3)
                 record_text = records[0]["content"]
                 final_input = received[-1]["input"]

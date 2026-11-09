@@ -1,6 +1,6 @@
 # Ask History
 
-`@ifwu/omp-ask-history` · OMP 18.18.1 · MIT
+`@ifwu/omp-ask-history` · OMP 18.18.3 · MIT
 
 Keep native Ask questions and answers readable when tool activity is hidden, and retain them across session resume without adding display records to model context.
 
@@ -18,6 +18,8 @@ This creates a persistent local link. Keep the checkout at that revision and sta
 ## Behavior
 
 The historical `dotfiles.ask-history` message type remains unchanged. When native tool results are visible, the extra display yields to them to avoid duplicates. Old sessions without these records are not rewritten.
+
+HTML-form field questions and submitted answers use the current native renderer. Pre-form records retain their saved answer text through its fallback; session files are not migrated.
 
 See the [behavior contracts](https://git.nice.do/fwu/omp-extensions/src/branch/main/docs/behavior.md) for boundaries, cleanup, and failure isolation.
 

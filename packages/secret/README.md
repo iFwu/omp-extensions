@@ -1,6 +1,6 @@
 # Session secrets
 
-Opt-in, session-local credential input for OMP 18.18.1 on macOS and Linux. Only
+Opt-in, session-local credential input for OMP 18.18.3 on macOS and Linux. Only
 explicit `/sec add NAME` or a model `secret` request opens masked input and stores
 a credential. The model receives a reference, not the entered value. This is
 accidental-disclosure protection, not an OS sandbox or credential broker.
@@ -77,7 +77,7 @@ chat remain ordinary text, not protected secrets.
 
 Input uses OMP's native `ctx.ui.input(..., { secret: true })` dialog, including its
 masked rendering, editing, paste handling and cancellation. This requires OMP
-18.18.1. Credential entry remains TUI-only, with no plaintext fallback.
+18.18.3. Credential entry remains TUI-only, with no plaintext fallback.
 
 ## Command execution
 
@@ -106,7 +106,8 @@ Unrelated token-looking strings and encoded/transformed values are unchanged:
 there is no shape matching, substring guessing, or encoded-value redaction.
 There is no raw-output temp artifact. Output exceeding 8 MiB stops the process and
 withholds all output, avoiding a leaked prefix at a truncation boundary. Timeout
-and cancellation terminate the process group. Shell quoting guards reject contexts
+and cancellation freeze and forcibly terminate the process group; shell cleanup
+traps do not run. Shell quoting guards reject contexts
 where a reference cannot be safely expanded, including unsafe nested-shell use.
 
 The vault is memory-only. `/new`, resume/fork/branch transitions and shutdown clear

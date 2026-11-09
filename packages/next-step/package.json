@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-next-step",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "Optional next-step drafts and private local feedback for OMP",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,6 @@
       "dataDir": { "type": "string", "description": "Optional private local dataset directory" }
     }
   },
-  "peerDependencies": { "@oh-my-pi/pi-ai": "18.18.1", "@oh-my-pi/pi-coding-agent": "18.18.1", "@oh-my-pi/pi-tui": "18.18.1" },
+  "peerDependencies": { "@oh-my-pi/pi-ai": "18.18.3", "@oh-my-pi/pi-coding-agent": "18.18.3", "@oh-my-pi/pi-tui": "18.18.3" },
   "peerDependenciesMeta": { "@oh-my-pi/pi-ai": { "optional": true }, "@oh-my-pi/pi-coding-agent": { "optional": true }, "@oh-my-pi/pi-tui": { "optional": true } }
 }

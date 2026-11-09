@@ -1,6 +1,6 @@
 # Next-step
 
-Optional post-answer drafts for OMP 18.18.1. After a completed main-agent turn, an optional native judge gate decides whether a draft is worth generating; one independent model request then returns `none`, one recommendation card, or 2–3 action cards above the composer. Next-step does not use the editor's ghost-text slot. No periodic polling, tool execution, or extra main-session message from generation. An unresolved Ask remains the main agent's responsibility.
+Optional post-answer drafts for OMP 18.18.3. After a completed main-agent turn, an optional native judge gate decides whether a draft is worth generating; one independent model request then returns `none`, one recommendation card, or 2–3 action cards above the composer. Next-step does not use the editor's ghost-text slot. No periodic polling, tool execution, or extra main-session message from generation. An unresolved Ask remains the main agent's responsibility.
 
 The feature is **off by default**. Installing the suite alone does not start model calls. Use `/next-step on` for the current process or persist plugin settings. The default selector is `@smol`, with `low` effort; configure a dedicated role to avoid coupling this feature to other background tasks. Role resolution selects the base model; effort is passed separately by this extension.
 
