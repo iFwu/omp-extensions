@@ -2,7 +2,7 @@
 
 Seven portable display, input, optional next-step, and session-secret extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed. The optional secret extension is included since `v0.5.0`.
 
-The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). Forgejo pushes Git refs to the downstream GitHub mirror when new commits are pushed, with a 24-hour periodic sync as a fallback. The mirror uses a fine-grained GitHub token limited to this repository with `Contents` and `Workflows` write access. Development, installation, and deployment do not wait for the mirror. Git mirroring does not copy issues or release metadata to GitHub.
+The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). Forgejo pushes Git refs to the downstream GitHub mirror when new commits are pushed. Periodic sync is disabled. The mirror uses a fine-grained GitHub token limited to this repository with `Contents` and `Workflows` write access. Development, installation, and deployment do not wait for the mirror. Git mirroring does not copy issues or release metadata to GitHub.
 
 ## Compatibility
 
