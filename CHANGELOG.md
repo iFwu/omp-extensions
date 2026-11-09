@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Prepare and cache the pinned official OMP host once per platform, then share verified artifacts across the CI matrix. Recheck release checksums on every restore and use bounded retries for cold downloads.
+
 ## 0.11.3
 
 - Support OMP 18.18.3. CI and the source preview select the runtime from the root SDK pin.

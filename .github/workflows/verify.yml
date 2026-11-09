@@ -14,7 +14,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-omp:
+    name: Prepare OMP (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read pinned host version
+        id: host
+        shell: bash
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("package.json"))["devDependencies"]["@oh-my-pi/pi-coding-agent"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ${{ runner.temp }}/omp-standalone
+          key: omp-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.host.outputs.version }}
+      - name: Check host download handling
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Download pinned official host
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: python3 scripts/ci-omp.py --download "$RUNNER_TEMP/omp-standalone"
+      - name: Verify restored host
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: python3 scripts/ci-omp.py "$RUNNER_TEMP/omp-standalone"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omp-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/omp-standalone/omp-*
+            ${{ runner.temp }}/omp-standalone/SHA256SUMS.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+
   verify:
+    needs: prepare-omp
     name: ${{ matrix.slice.name }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -49,40 +90,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install pinned OMP and verify release checksum
+      - uses: actions/download-artifact@v4
+        with:
+          name: omp-${{ matrix.os }}
+          path: ${{ runner.temp }}/omp-standalone
+      - name: Verify and activate prepared host
         shell: bash
         run: |
-          set -euo pipefail
-          case "$(uname -s)-$(uname -m)" in
-            Linux-x86_64) asset=omp-linux-x64 ;;
-            Linux-aarch64|Linux-arm64) asset=omp-linux-arm64 ;;
-            Darwin-arm64) asset=omp-darwin-arm64 ;;
-            Darwin-x86_64) asset=omp-darwin-x64 ;;
-            *) echo 'Unsupported runner architecture' >&2; exit 1 ;;
-          esac
-          install_dir="$RUNNER_TEMP/omp-standalone"
-          mkdir -p "$install_dir"
-          version=$(bun -p 'require("./package.json").devDependencies["@oh-my-pi/pi-coding-agent"]')
-          base="https://github.com/can1357/oh-my-pi/releases/download/v$version"
-          curl --fail --location --retry 3 --retry-all-errors "$base/$asset" -o "$install_dir/$asset"
-          curl --fail --location --retry 3 --retry-all-errors "$base/SHA256SUMS.txt" -o "$install_dir/SHA256SUMS.txt"
-          python3 - "$install_dir" "$asset" <<'PY'
-          import hashlib
-          from pathlib import Path
-          import sys
-          root, asset = Path(sys.argv[1]), sys.argv[2]
-          sums = [line.split() for line in (root / 'SHA256SUMS.txt').read_text().splitlines() if line.strip()]
-          matches = [digest for digest, name in sums if name.lstrip('*') == asset]
-          assert len(matches) == 1, f'Missing or ambiguous checksum: {asset}'
-          with (root / asset).open('rb') as binary:
-              actual = hashlib.file_digest(binary, 'sha256').hexdigest()
-          assert actual == matches[0], f'Checksum mismatch: {asset}'
-          PY
-          chmod 755 "$install_dir/$asset"
-          ln -s "$install_dir/$asset" "$install_dir/omp"
-          echo "$install_dir" >> "$GITHUB_PATH"
-          echo "OMP_BIN=$install_dir/omp" >> "$GITHUB_ENV"
-          "$install_dir/omp" --version
+          python3 scripts/ci-omp.py "$RUNNER_TEMP/omp-standalone"
+          echo "$RUNNER_TEMP/omp-standalone" >> "$GITHUB_PATH"
+          echo "OMP_BIN=$RUNNER_TEMP/omp-standalone/omp" >> "$GITHUB_ENV"
       - name: Install development dependencies
         run: |
           bun install --frozen-lockfile
