@@ -29,7 +29,7 @@
 
 - Gate next-step generation on the native `judge` role (for example `typesafe/jev-1.14.0`) when it resolves to a native judgment API: generation runs only when the judge gives at least 0.4 probability that the user will approve or pick something the latest answer proposed. Gate errors and its 5-second deadline fail open; a `gated` feedback event records each decision. Without a native judge, behavior is unchanged.
 - Revise the suggestion prompt (`next-step-5`) toward short approvals of what the assistant offered, recommended, or diagnosed. Options the answer lists stay a choice with the recommended option first.
-- Move the canonical repository, Git installation examples, package metadata, contributions, and issue tracker to [Forgejo](https://git.nice.do/fwu/omp-extensions). Keep version `0.8.0` and existing release tags unchanged. Forgejo pushes Git refs to the existing GitHub mirror every 24 hours with a repository-scoped deploy key; sync-on-commit is disabled.
+- Move the canonical repository, Git installation examples, package metadata, contributions, and issue tracker to [Forgejo](https://git.nice.do/fwu/omp-extensions). Keep version `0.8.0` and existing release tags unchanged. GitHub remains a downstream mirror.
 - Document the retained GitHub verification workflow and the separate Forgejo runner/workflow setup required for equivalent Linux/macOS automation.
 
 ## 0.8.0

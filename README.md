@@ -2,7 +2,7 @@
 
 Seven portable display, input, optional next-step, and session-secret extensions for [Oh My Pi](https://github.com/can1357/oh-my-pi), maintained as a Bun workspace monorepo. The root `@ifwu/omp-extensions` package installs the complete suite; each feature also has its own package, source, tests, and README. MIT licensed. The optional secret extension is included since `v0.5.0`.
 
-The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). Forgejo pushes Git refs to the downstream GitHub mirror when new commits are pushed. Periodic sync is disabled. The mirror uses a fine-grained GitHub token limited to this repository with `Contents` and `Workflows` write access. Development, installation, and deployment do not wait for the mirror. Git mirroring does not copy issues or release metadata to GitHub.
+The canonical source, contributions, and [issue tracker](https://git.nice.do/fwu/omp-extensions/issues) are hosted on [Forgejo](https://git.nice.do/fwu/omp-extensions). GitHub is a downstream mirror.
 
 ## Compatibility
 
@@ -108,7 +108,7 @@ The package smoke checks and installs the root tarball and every standalone work
 
 For Git transport verification, run `python3 scripts/smoke-package.py --git-source git+https://git.nice.do/fwu/omp-extensions.git@<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes. Use `@<ref>` for this generic Git host so OMP records the installation as pinned; the installer converts it to Bun's Git ref syntax.
 
-The retained `.github/workflows/verify.yml` runs on the GitHub mirror: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. A mirrored update to `main` triggers GitHub verification; Forgejo pull requests do not. The workflow takes the OMP release version from the root `@oh-my-pi/pi-coding-agent` SDK pin and verifies the downloaded binary against the official release checksum. This repository does not declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review asynchronous mirror CI failures when available.
+The retained `.github/workflows/verify.yml` runs on GitHub: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. The workflow takes the OMP release version from the root `@oh-my-pi/pi-coding-agent` SDK pin and verifies the downloaded binary against the official release checksum. This repository does not declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review GitHub CI failures when available.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
 
