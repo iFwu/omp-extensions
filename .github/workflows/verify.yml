@@ -64,8 +64,8 @@ jobs:
           mkdir -p "$install_dir"
           version=$(bun -p 'require("./package.json").devDependencies["@oh-my-pi/pi-coding-agent"]')
           base="https://github.com/can1357/oh-my-pi/releases/download/v$version"
-          curl --fail --location --retry 3 "$base/$asset" -o "$install_dir/$asset"
-          curl --fail --location --retry 3 "$base/SHA256SUMS.txt" -o "$install_dir/SHA256SUMS.txt"
+          curl --fail --location --retry 3 --retry-all-errors "$base/$asset" -o "$install_dir/$asset"
+          curl --fail --location --retry 3 --retry-all-errors "$base/SHA256SUMS.txt" -o "$install_dir/SHA256SUMS.txt"
           python3 - "$install_dir" "$asset" <<'PY'
           import hashlib
           from pathlib import Path
