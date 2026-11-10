@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Align the extension SDK, peer dependencies, and CI host with OMP 18.18.6.
 - Prepare and cache the pinned official OMP host once per platform, then share verified artifacts across the CI matrix. Recheck release checksums on every restore and use bounded retries for cold downloads.
 
 ## 0.11.3

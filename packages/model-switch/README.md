@@ -1,6 +1,6 @@
 # Session Model Switching
 
-`@ifwu/omp-model-switch` · OMP 18.18.3 · MIT
+`@ifwu/omp-model-switch` · OMP 18.18.6 · MIT
 
 Make `/model <selector>` and `/models <selector>` use native session-only `/switch` semantics.
 

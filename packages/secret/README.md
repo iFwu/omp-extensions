@@ -1,6 +1,6 @@
 # Session secrets
 
-Opt-in, session-local credential input for OMP 18.18.3 on macOS and Linux. Only
+Opt-in, session-local credential input for OMP 18.18.6 on macOS and Linux. Only
 explicit `/sec add NAME` or a model `secret` request opens masked input and stores
 a credential. The model receives a reference, not the entered value. This is
 accidental-disclosure protection, not an OS sandbox or credential broker.
@@ -77,7 +77,7 @@ chat remain ordinary text, not protected secrets.
 
 Input uses OMP's native `ctx.ui.input(..., { secret: true })` dialog, including its
 masked rendering, editing, paste handling and cancellation. This requires OMP
-18.18.3. Credential entry remains TUI-only, with no plaintext fallback.
+18.18.6. Credential entry remains TUI-only, with no plaintext fallback.
 
 ## Command execution
 
