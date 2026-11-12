@@ -1,6 +1,6 @@
 # Composer
 
-`@ifwu/omp-composer` · OMP 18.18.6 · MIT
+`@ifwu/omp-composer` · OMP 18.19.0 · MIT
 
 Queue headings and Working/Worked duration display. The input editor, drafts, queue delivery, status controls, and provider context remain native.
 

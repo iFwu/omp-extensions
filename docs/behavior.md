@@ -1,6 +1,6 @@
 # Behavior contracts
 
-These contracts apply to the ordinary terminal TUI on OMP 18.18.6, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
+These contracts apply to the ordinary terminal TUI on OMP 18.19.0, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
 
 ## Queue and activity
 
