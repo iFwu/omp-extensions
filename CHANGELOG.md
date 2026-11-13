@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.5
+
+- Support OMP 18.20.0: align the extension SDK, peer dependencies, and CI host.
+
 ## 0.11.4
 
 - Support OMP 18.19.0: align the extension SDK, peer dependencies, and CI host.
