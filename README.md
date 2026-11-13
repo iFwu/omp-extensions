@@ -108,6 +108,16 @@ The package smoke checks and installs the root tarball and every standalone work
 
 For Git transport verification, run `python3 scripts/smoke-package.py --git-source git+https://git.nice.do/fwu/omp-extensions.git@<ref>` with the exact commit matching the checkout. This installs the suite through Git instead of a local link, checks that only the suite package is enabled, and omits the separate workspace smokes. Use `@<ref>` for this generic Git host so OMP records the installation as pinned; the installer converts it to Bun's Git ref syntax.
 
+The smoke replaces `HOME` and XDG directories, so global, user, and checkout-local Git configuration does not reach the clone. When the Git host requires authentication, pass the existing credential helper through Git's `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` environment variables, which the isolated environment keeps. The helper must read credentials from an absolute location rather than the replaced `HOME`. Never put a token in the URL.
+
+```sh
+helper="$(git config --get credential.https://git.nice.do.helper)"
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=credential.https://git.nice.do.helper \
+GIT_CONFIG_VALUE_0="$helper" \
+python3 scripts/smoke-package.py --git-source "git+https://git.nice.do/fwu/omp-extensions.git@$(git rev-parse HEAD)"
+```
+
 The retained `.github/workflows/verify.yml` runs on GitHub: Linux and macOS, with independent workspace, integration, and typecheck/package-smoke slices. Two preparation jobs fetch the OMP release pinned by the root `@oh-my-pi/pi-coding-agent` SDK once per platform and cache it by version, OS, and architecture. Cold downloads have bounded retries; cached and artifact-restored binaries are checked against the official release checksum before execution. The 18 test jobs consume the prepared artifacts instead of downloading OMP again. Preparation failures block the test matrix and remain visible. This repository does not declare an active Forgejo CI workflow. Run the relevant local checks before tagging or publishing and review GitHub CI failures when available.
 
 If a check fails, first distinguish dependency/type errors, plugin discovery or import errors, and TUI timing/rendering errors. Report the OMP/Bun/Python versions, OS, exact failing command and test, and redacted stderr. Reproduce with the isolated fixtures rather than enabling production providers. Internal UI changes are a compatibility issue, not a reason to suppress extension errors.
