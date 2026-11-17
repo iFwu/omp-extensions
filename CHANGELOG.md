@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.7
+
+- Attach foreground tool wait to the elapsed time it belongs to: `2m01s ✦ 2m01s · 10 tools` instead of `2m01s · ✦ 2m01s · 10 tools`.
+
 ## 0.11.6
 
 - Mark foreground tool wait in grouping labels with `✦` instead of `⟡`; renderers without a font fallback for U+27E1, such as some Rex clients, showed a missing-glyph box.

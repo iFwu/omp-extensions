@@ -224,7 +224,7 @@ export default function(pi) {
                 self.assertIn("1 failed", rendered)
                 long_gap = rendered[rendered.index("SECOND_COMMENTARY"):rendered.index("THIRD_COMMENTARY")].splitlines()
                 long_marker = next(row for row in long_gap if "✦" in row)
-                self.assertRegex(long_marker, r"^ 2m01s · ✦ 2m01s · 10 tools")
+                self.assertRegex(long_marker, r"^ 2m01s ✦ 2m01s · 10 tools")
                 provider_gap = rendered[rendered.index("THIRD_COMMENTARY"):rendered.index("AFTER_LONG_GAP")]
                 self.assertNotIn("✦", provider_gap)
                 self.assertRegex(provider_gap, r"(?m)^ 12s\s*$")
@@ -237,7 +237,7 @@ export default function(pi) {
                 mobile = "\n".join(row for message in capture(48) for row in message)
                 self.assertIn(" ══ Done", mobile)
                 self.assertIn("1 failed", mobile)
-                self.assertRegex(mobile, r"(?m)^ 2m01s · ✦ 2m01s")
+                self.assertRegex(mobile, r"(?m)^ 2m01s ✦ 2m01s")
                 self.assertIn("FINAL_DONE", mobile)
                 self.assertTrue(all(len(row) <= 48 for row in mobile.splitlines()))
                 fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 80, 0, 0))
