@@ -393,7 +393,7 @@ export default function(pi) {
             rows = [row for message in json.loads(snapshot_path.read_text()) for row in message]
             marker = next(row for row in rows if "Done" in row)
             self.assertRegex(marker, r"^ ══ Done · 2m01s ═+$")
-            self.assertNotIn("⟡", "\n".join(rows))
+            self.assertNotIn("✦", "\n".join(rows))
             self.assertIn("FINAL_STREAM_START", "\n".join(rows))
             self.assertIn("FINAL_STREAM_END", "\n".join(rows))
             host_after = json.loads(host_clock_path.read_text())

@@ -34,11 +34,11 @@ const render = (marker, limit) => renderGroupingLabel(marker, limit, colors);
     def test_blocking_time_yields_to_required_information(self):
         self.run_formatter(r"""
 const blocked = plain(render({ kind: "phase", seconds: 1101, tools: 28, failures: 1, blocking: 23 }, 100));
-assert.ok(blocked.includes("⟡ 23s") && blocked.includes("28 tools") && blocked.includes("1 failed"));
+assert.ok(blocked.includes("✦ 23s") && blocked.includes("28 tools") && blocked.includes("1 failed"));
 const narrow = plain(render({ kind: "phase", seconds: 123, tools: 1, failures: 0, blocking: 108 }, 20));
-assert.ok(!narrow.includes("⟡") && narrow.includes("2m03s") && narrow.includes("1 tool"));
+assert.ok(!narrow.includes("✦") && narrow.includes("2m03s") && narrow.includes("1 tool"));
 for (const blocking of [undefined, 0]) {
-  assert.ok(!plain(render({ kind: "phase", seconds: 123, tools: 1, failures: 0, blocking }, 100)).includes("⟡"));
+  assert.ok(!plain(render({ kind: "phase", seconds: 123, tools: 1, failures: 0, blocking }, 100)).includes("✦"));
 }
 """)
 

@@ -1,6 +1,6 @@
 {
   "name": "@ifwu/omp-next-step",
-  "version": "0.11.5",
+  "version": "0.11.6",
   "description": "Optional next-step drafts and private local feedback for OMP",
   "type": "module",
   "license": "MIT",

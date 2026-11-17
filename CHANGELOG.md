@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.6
+
+- Mark foreground tool wait in grouping labels with `✦` instead of `⟡`; renderers without a font fallback for U+27E1, such as some Rex clients, showed a missing-glyph box.
+
 ## 0.11.5
 
 - Support OMP 18.20.0: align the extension SDK, peer dependencies, and CI host.

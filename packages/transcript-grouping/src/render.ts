@@ -42,7 +42,7 @@ export function renderGroupingLabel(marker: GroupingMarker, limit: number, color
     const parts: string[] = [];
     if (marker.kind === "final") parts.push(strong("══ Done"));
     if (level < 3) parts.push(faint(duration(marker.seconds, level >= 2)));
-    if (step === 0 && marker.blocking !== undefined && marker.blocking > 0) parts.push(faint(`⟡ ${duration(marker.blocking, false)}`));
+    if (step === 0 && marker.blocking !== undefined && marker.blocking > 0) parts.push(faint(`✦ ${duration(marker.blocking, false)}`));
     if (marker.tools > 0 && level < 4) {
       parts.push(faint(level === 0 ? `${marker.tools} ${marker.tools === 1 ? "tool" : "tools"}` : `${marker.tools}t`));
     }
