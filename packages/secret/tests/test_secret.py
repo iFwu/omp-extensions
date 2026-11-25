@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from queue import Empty, Queue
 import secrets
+import shlex
 import shutil
 import tempfile
 import threading
@@ -252,7 +253,7 @@ class NativeSession:
         return self.finish_turn(self.start_turn(tool, args, prompt))
 
     def secret(self, args):
-        return self.turn("write", {"i": "Managing synthetic credentials", "path": "xd://secret", "content": json.dumps(args)})
+        return self.turn("bash", {"i": "Managing synthetic credentials", "command": secret_command(args), "timeout": 5})
 
     def close(self):
         if self.child.isalive():
@@ -265,6 +266,15 @@ class NativeSession:
                 self.child.terminate(force=True)
             self.record_terminal(self.child.before or "")
         self.child.close()
+
+
+def secret_command(args):
+    """Invoke the discoverable tool the way the prompt hint documents: `secret <action> --name … --reason …`."""
+    words = ["secret", args["action"]]
+    for key in ("name", "reason"):
+        if key in args:
+            words += [f"--{key}", args[key]]
+    return shlex.join(words)
 
 
 def contains_canary(path, values):
@@ -355,18 +365,20 @@ class SecretRuntimeTests(unittest.TestCase):
             self.assertNotIn(manual, result)
 
         with self.subTest("on-demand discovery without schema promotion"):
-            schema = session.turn("read", {"i": "Discovering credential input", "path": "xd://secret"})
+            schema = session.turn("bash", {"i": "Discovering credential input", "command": "secret --help", "timeout": 5})
             self.assertIn("request", schema)
-            self.assertIn("reason", schema)
+            self.assertIn("--reason", schema)
             names = [tool.get("function", {}).get("name") for tool in server.requests[0].get("tools", [])]
-            self.assertIn("read", names)
-            self.assertIn("write", names)
-            self.assertNotIn("secret", names, "secret must remain discoverable, not top-level")
+            self.assertIn("bash", names)
+            self.assertNotIn("secret", names, "secret must remain a discoverable tool command, not top-level")
+            system = json.dumps([message for message in server.requests[0].get("messages", [])
+                                 if message.get("role") in ("system", "developer")])
+            self.assertIn("secret --help", system, "the secret hint must point at the tool command")
 
         request = {"action": "request", "name": "PA_E2E_PHONE", "reason": "Authenticate local smoke endpoint"}
         with self.subTest("model-triggered masked input"):
-            previous = session.start_turn("write", {"i": "Requesting credential input", "path": "xd://secret",
-                                                     "content": json.dumps(request)})
+            previous = session.start_turn("bash", {"i": "Requesting credential input", "command": secret_command(request),
+                                                    "timeout": 120})
             session.wait(lambda: "Purpose: Authenticate local smoke endpoint" in session.visible(), "model-triggered input")
             session.child.send("\x1b[200~" + canary + "\x1b[201~")
             session.pump(0.4)

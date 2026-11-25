@@ -70,7 +70,7 @@ def smoke_package(package_directory, install_source=None):
 
             def do_POST(self):
                 request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-                Handler.secret_hints.append("xd://secret" in json.dumps(request))
+                Handler.secret_hints.append("secret --help" in json.dumps(request))
                 Handler.calls += 1
                 item = {"type": "message", "id": "msg_smoke", "role": "assistant", "status": "completed",
                         "phase": "final_answer", "content": [{"type": "output_text", "text": TEXT, "annotations": []}]}
@@ -97,7 +97,7 @@ def smoke_package(package_directory, install_source=None):
                   "memory": {"backend": "off"}, "completion": {"notify": "off"}}
         models = {"providers": {"package-fixture": {"baseUrl": f"http://127.0.0.1:{server.server_port}/v1",
                   "api": "openai-responses", "auth": "apiKey", "apiKey": "fixture-only",
-                  "models": [{"id": "fixture", "name": "Package Fixture", "input": ["text"],
+                  "models": [{"id": "fixture", "name": "Package Fixture", "reasoning": False, "input": ["text"],
                               "contextWindow": 100000, "maxTokens": 1024}]}}}
         for name, value in (("config.yml", config), ("models.yml", models)):
             write_yaml(agent / name, value)

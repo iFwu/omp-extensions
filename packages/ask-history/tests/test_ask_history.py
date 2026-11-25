@@ -268,17 +268,13 @@ export default function(pi) {
 
             with session() as (process, send, wait_for):
                 send("prompt", message="Read the fixture, ask the questions, then finish.")
-                def answer(method, value):
-                    dialog = wait_for(lambda frame: frame.get("method") == method)
-                    process.stdin.write(json.dumps({"type": "extension_ui_response", "id": dialog["id"],
-                                                    "value": value(dialog) if callable(value) else value}) + "\n")
-                    process.stdin.flush()
-
-                answer("select", "Keep")
-                answer("select", "Search")
-                answer("select", "Export")
-                answer("select", lambda dialog: next(option for option in dialog["options"] if "Done selecting" in option))
-                answer("input", "Keep the question visible")
+                # RPC hosts receive the ask tool's HTML as one `form` request and answer with submitted control values.
+                dialog = wait_for(lambda frame: frame.get("method") == "form")
+                self.assertEqual(dialog["html"], html)
+                process.stdin.write(json.dumps({"type": "extension_ui_response", "id": dialog["id"], "data": {
+                    "choice": "keep", "features": ["search", "export"], "feedback": "Keep the question visible",
+                }}) + "\n")
+                process.stdin.flush()
                 wait_for(lambda frame: frame["type"] == "session_settled")
                 messages = send("get_messages")["messages"]
                 records = [message for message in messages if message.get("customType") == "dotfiles.ask-history"]

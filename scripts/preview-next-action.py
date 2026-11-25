@@ -195,7 +195,8 @@ def offline_launch(binary, root, server, *, scene=None, effort="low", extra_exte
     agent.mkdir(parents=True)
     config = {
         "startup": {"setupWizard": False, "checkUpdate": False, "quiet": True},
-        "providers": {"cacheWarming": "off"}, "memory": {"backend": "off"},
+        # OMP 19 composer predictions would send extra main-model fixture requests and ghost text.
+        "providers": {"cacheWarming": "off"}, "memory": {"backend": "off"}, "composer": {"predictions": False},
         "disabledProviders": ["ollama", "llama.cpp", "lm-studio", "apple", "local", "web"],
         "retry": {"enabled": False, "modelFallback": False}, "compaction": {"enabled": False},
         "completion": {"notify": "off"}, "spelling": {"enabled": False},

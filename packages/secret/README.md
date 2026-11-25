@@ -1,6 +1,6 @@
 # Session secrets
 
-Opt-in, session-local credential input for OMP 18.20.0 on macOS and Linux. Only
+Opt-in, session-local credential input for OMP 19.1.1 on macOS and Linux. Only
 explicit `/sec add NAME` or a model `secret` request opens masked input and stores
 a credential. The model receives a reference, not the entered value. This is
 accidental-disclosure protection, not an OS sandbox or credential broker.
@@ -26,12 +26,12 @@ activation; the extension does not restore tools deliberately excluded by the ho
 ## On-demand interface
 
 The extension code stays loaded locally. Its full tool schema does not appear in
-the default provider tool list: `secret` uses `loadMode: "discoverable"`. A short
-system-prompt hint points to `xd://secret`; the model reads that URI when needed,
-then invokes it by writing JSON to the same URI:
+the default provider tool list: `secret` uses `loadMode: "discoverable"`, which
+OMP mounts as a bash tool command. A short system-prompt hint points to
+`secret --help`; the model runs that when needed, then invokes the command:
 
-```json
-{"action":"request","name":"deploy_token","reason":"Authenticate the requested deployment"}
+```sh
+secret request --name deploy_token --reason "Authenticate the requested deployment"
 ```
 
 The terminal shows the name, purpose and a masked input. A successful result is:
@@ -46,17 +46,18 @@ underscores or hyphens. `PA_E2E_PHONE`, `deploy_token` and `_Mixed-Key` are vali
 `TOKEN` and `token` identify separate credentials. Request, `/sec` management,
 reference completion and Bash consumption preserve the exact spelling.
 
-`{"action":"list"}` returns references only, without previews, fingerprints,
+`secret list` returns references only, without previews, fingerprints,
 lengths or values. An existing name returns `available` without another dialog or
 an overwrite. Cancellation, headless use, invalid input and a busy dialog return
 explicit statuses. Pending input is discarded when the session changes, the call
 is aborted or the feature is disabled. Subagents cannot access the main vault.
 
-This uses OMP's existing `read`/`write` tool devices, not disk files, a standalone
-CLI, or an IPC service. The separate `agent-credentials` 1Password workflow is not
-modified. Once read, schema text remains ordinary conversation history until
-normal context management removes it. Explicit `--tools secret` forces top-level
-schema exposure and should not be used to enable normal operation.
+This uses OMP's native tool-command dispatch inside the `bash` tool, not disk
+files, a standalone CLI, or an IPC service. The separate `agent-credentials`
+1Password workflow is not modified. Once read, help text remains ordinary
+conversation history until normal context management removes it. With OMP's
+`tools.commands` setting disabled, or with explicit `--tools secret`, the schema is
+exposed top-level instead; the flag should not be used to enable normal operation.
 
 ## Manual input and management
 
@@ -77,7 +78,7 @@ chat remain ordinary text, not protected secrets.
 
 Input uses OMP's native `ctx.ui.input(..., { secret: true })` dialog, including its
 masked rendering, editing, paste handling and cancellation. This requires OMP
-18.20.0. Credential entry remains TUI-only, with no plaintext fallback.
+19.1.1. Credential entry remains TUI-only, with no plaintext fallback.
 
 ## Command execution
 

@@ -15,7 +15,8 @@ def extension_path(package, module="index.ts"):
 
 def write_yaml(path, data):
     if Path(path).name == "config.yml":
-        data = {"memory": {"backend": "off"},
+        # Host side-channel model calls (OMP 19 composer predictions) would add unplanned fixture requests.
+        data = {"memory": {"backend": "off"}, "composer": {"predictions": False},
                 "disabledProviders": ["ollama", "llama.cpp", "lm-studio", "apple", "local", "web"], **data}
     Path(path).write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
 

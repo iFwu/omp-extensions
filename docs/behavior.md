@@ -1,6 +1,6 @@
 # Behavior contracts
 
-These contracts apply to the ordinary terminal TUI on OMP 18.20.0, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
+These contracts apply to the ordinary terminal TUI on OMP 19.1.1, not a separate native application surface. Display enhancements never change provider context, submitted text, tool execution, or the native message queue.
 
 ## Queue and activity
 
@@ -58,7 +58,7 @@ Generation failures permit later turns to try again. Dataset write failures disa
 
 Secret handling is disabled by default: the suite setting is `secret: false`, and the standalone package setting is `enabled: false`. Disabled loading registers no secret tool, `/sec` command, or prompt hint. Enable the installed package with native `omp plugin config set` and start a fresh process, or explicitly pass `--secret` for a source-based run. CLI selection takes precedence over standalone settings, then suite settings; do not load both entry points. No OMP CLI/IPC implementation or 1Password integration is changed.
 
-When enabled with native Bash available, exactly one discoverable agent tool, `secret`, has the actions `request` and `list`. The model reads `xd://secret` for the schema and writes JSON to that URI when needed. The prompt contains only a short discovery hint, not the entire schema. `request` uses masked input and requires at least eight characters with no NUL; cancellation and timeout do not store a value. Tool schemas and results carry names and `{{sec:name}}` references, never raw credentials. `/sec` retains manual management. This feature does not provide credentials to other sessions or persist them for restart/resume: each session owns its in-memory values, and a newly opened session must request them again.
+When enabled with native Bash available, exactly one discoverable agent tool, `secret`, has the actions `request` and `list`. OMP mounts it as a bash tool command: the model runs `secret --help` for the schema and `secret request …`/`secret list` when needed. The prompt contains only a short discovery hint, not the entire schema. `request` uses masked input and requires at least eight characters with no NUL; cancellation and timeout do not store a value. Tool schemas and results carry names and `{{sec:name}}` references, never raw credentials. `/sec` retains manual management. This feature does not provide credentials to other sessions or persist them for restart/resume: each session owns its in-memory values, and a newly opened session must request them again.
 
 Credential input uses OMP's native `ui.input` with `secret: true` and the request's abort signal. Entry remains TUI-only. Reference names match `[A-Za-z_][A-Za-z0-9_-]{0,63}` and preserve case: `TOKEN` and `token` address separate entries. Manual management, tool requests, completion and Bash consumption use the same naming rules.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.8
+
+- Support OMP 19.1.1: align the extension SDK, peer dependencies, and CI host.
+- Session secrets: OMP 19.1 replaced `xd://` tool devices with bash tool commands, so the discoverable `secret` tool is now invoked as `secret --help` / `secret request --name NAME --reason TEXT` / `secret list` inside bash. The prompt hint, docs, runtime test, and package smoke follow the new interface.
+- Real-OMP fixtures and the offline next-step preview disable OMP 19's default composer predictions, which add an extra main-model request after each turn; the package smoke fixture declares its model non-reasoning so OMP's reasoning-capability probe stays out of its request count; the Ask history RPC test answers the 19.1 single HTML-form `form` request instead of field-by-field dialogs.
+
 ## 0.11.7
 
 - Attach foreground tool wait to the elapsed time it belongs to: `2m01s ✦ 2m01s · 10 tools` instead of `2m01s · ✦ 2m01s · 10 tools`.
