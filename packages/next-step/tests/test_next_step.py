@@ -43,7 +43,7 @@ def popup_shows(session, label):
 
 
 class NativeSession:
-    def __init__(self, testcase, persistent=None, delayed_input=False, controlled_time=False, judge=False):
+    def __init__(self, testcase, persistent=None, delayed_input=False, controlled_time=False, judge=False, fallback=False):
         self.testcase = testcase
         self.directory = tempfile.TemporaryDirectory(prefix="omp-next-step-test-")
         self.root = Path(self.directory.name)
@@ -101,7 +101,7 @@ export default function(pi) {
  pi.on("session_shutdown",()=>clearInterval(timer));
 }
 ''')
-        command, env = preview.offline_launch(OMP_BIN, self.root, self.server, extra_extensions=[observer], judge=judge)
+        command, env = preview.offline_launch(OMP_BIN, self.root, self.server, extra_extensions=[observer], judge=judge, fallback=fallback)
         if controlled_time:
             source = str(REPO / "packages/next-step/src/index.ts")
             command[command.index(source)] = str(write_next_step_clock(self.root))
@@ -918,6 +918,35 @@ export default function(pi) {
                     self.assertEqual(len(session.requests(suggestion=True)), suggestions)
                     self.assertEqual(len(session.events("displayed")), displayed)
                     session.expect_no_suggestion()
+
+    def test_provider_failure_walks_native_fallback_chain(self):
+        session = NativeSession(self, fallback=True)
+        backup = f"{preview.SUGGESTION_MODEL.rsplit('/', 1)[0]}/backup"
+        for backed, outcome in (("normal", "displayed"), ("failure", "failed")):
+            with self.subTest(backup=backed):
+                count = len(session.events(outcome))
+                primaries, backups = len(session.requests(suggestion=True)), len(session.server.model_requests(backup))
+                session.server.next_suggestion("failure")
+                session.server.next_suggestion(backed)
+                session.scene("ready")
+                event = session.event(outcome, after=count)
+                if outcome == "displayed":
+                    generated = session.events("generated")[-1]
+                    self.assertEqual(generated["model"], backup)
+                    self.assertEqual([attempt["model"] for attempt in generated["fallbackFrom"]], [preview.SUGGESTION_MODEL])
+                    self.assertIn("Injected preview suggestion failure", generated["fallbackFrom"][0]["error"])
+                    session.clear()
+                else:
+                    self.assertEqual(event["model"], backup)
+                    self.assertEqual([attempt["model"] for attempt in event["fallbackFrom"]], [preview.SUGGESTION_MODEL])
+                    notifications = len(session.state().get("notifications", []))
+                    session.send("/next-step status\r")
+                    status = session.wait(lambda: next((item["message"] for item in session.state().get("notifications", [])[notifications:]
+                                                       if "最近失败" in item["message"]), None), "failure status")
+                    self.assertIn(f"先前出口：{preview.SUGGESTION_MODEL}", status)
+                # Each chain entry gets exactly one request; the extension adds no same-model retry.
+                self.assertEqual(len(session.requests(suggestion=True)), primaries + 1)
+                self.assertEqual(len(session.server.model_requests(backup)), backups + 1)
 
 
 if __name__ == "__main__":

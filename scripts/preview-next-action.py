@@ -109,8 +109,8 @@ class FixtureHandler(BaseHTTPRequestHandler):
         if self.path.endswith("/systemone"):
             self.answer_judge(body)
             return
-        suggestion = body.get("model") == "suggestion"
-        if body.get("model") not in ("main", "suggestion"):
+        suggestion = body.get("model") in ("suggestion", "backup")
+        if body.get("model") not in ("main", "suggestion", "backup"):
             self.send_error(400, "Only local fixture models are allowed")
             return
         messages = body.get("input", body.get("messages", []))
@@ -187,7 +187,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def offline_launch(binary, root, server, *, scene=None, effort="low", extra_extensions=(), judge=False):
+def offline_launch(binary, root, server, *, scene=None, effort="low", extra_extensions=(), judge=False, fallback=False):
     """Build isolated source-run arguments; shared with real TUI regression tests."""
     root = Path(root)
     home = root / "home"
@@ -207,9 +207,13 @@ def offline_launch(binary, root, server, *, scene=None, effort="low", extra_exte
         "auth": "apiKey", "apiKey": "local-fixture-only", "models": [
             {"id": model, "name": f"Next Step Fixture {model}", "reasoning": False,
              "input": ["text"], "contextWindow": 100000, "maxTokens": 2048}
-            for model in ("main", "suggestion")
+            for model in ("main", "suggestion", *(("backup",) if fallback else ()))
         ],
     }}
+    if fallback:
+        # Native chain for the suggestion model only; the main model keeps its own (absent) chain.
+        config["retry"] = {"enabled": True, "modelFallback": True, "maxRetries": 0,
+                           "fallbackChains": {SUGGESTION_MODEL: [f"{SUGGESTION_MODEL.rsplit('/', 1)[0]}/backup"]}}
     if judge:
         # A loopback System One judge; the real TypeSafe route shape, no credentials.
         providers["preview-judge"] = {

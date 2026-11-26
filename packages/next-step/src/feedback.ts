@@ -1,16 +1,19 @@
 import { closeSync, constants, mkdirSync, openSync, writeSync } from "node:fs";
 import type { Suggestion, SuggestionContext } from "./suggestion";
 
+/** A provider attempt that failed before next-step moved to the next `retry.fallbackChains` entry. */
+export interface FallbackAttempt { model: string; stopReason?: string; error: string; latencyMs: number }
+
 export type FeedbackEvent =
   | { type: "requested"; context: SuggestionContext; model: string; effort: string; promptVersion: string }
-  | { type: "generated"; context: SuggestionContext; result: Suggestion; model: string; effort: string; promptVersion: string; latencyMs: number }
+  | { type: "generated"; context: SuggestionContext; result: Suggestion; model: string; effort: string; promptVersion: string; latencyMs: number; fallbackFrom?: FallbackAttempt[] }
   | { type: "gated"; model: string; threshold: number; latencyMs: number; probability?: number; error?: string }
   | { type: "displayed" }
   | { type: "accepted"; indices: number[]; draft: string }
   | { type: "submitted"; outcome: "accepted" | "edited" | "other"; text: string; displayed: boolean; truncated: boolean }
   | { type: "ended"; reason: string; displayed: boolean; accepted: boolean }
   | { type: "cancelled" | "dismissed" | "skipped"; reason: string }
-  | { type: "failed"; reason: string; model: string; effort: string; stage: "provider" | "parse"; stopReason?: string; error: string; latencyMs: number };
+  | { type: "failed"; reason: string; model: string; effort: string; stage: "provider" | "parse"; stopReason?: string; error: string; latencyMs: number; fallbackFrom?: FallbackAttempt[] };
 
 export function appendFeedback(directory: string, file: string, id: string, event: FeedbackEvent): void {
   mkdirSync(directory, { recursive: true, mode: 0o700 });

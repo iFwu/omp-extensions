@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.0
+
+- Next-step generation walks OMP's native `retry.fallbackChains` after a provider error: each credentialed chain entry gets one request, in order, within the existing 60-second deadline. It honors `retry.enabled`, `retry.modelFallback`, and `retry.fallbackOn` like the main session; cancellations and invalid JSON do not move down the chain.
+- `generated` and `failed` feedback records name the model that served or failed last, and list earlier failed attempts in `fallbackFrom`; `/next-step status` shows those attempts below the most recent failure.
+
 ## 0.11.8
 
 - Support OMP 19.1.1: align the extension SDK, peer dependencies, and CI host.

@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
-import { completeSimple, Effort } from "@oh-my-pi/pi-ai";
+import { completeSimple, Effort, type AssistantMessage } from "@oh-my-pi/pi-ai";
+import * as AIError from "@oh-my-pi/pi-ai/error";
 import type { AgentEndEvent, ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { getPluginSettings } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import { matchesKey, type TUI } from "@oh-my-pi/pi-tui";
 import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
-import { appendFeedback, type FeedbackEvent } from "./feedback";
+import { appendFeedback, type FallbackAttempt, type FeedbackEvent } from "./feedback";
 import { suggestionRows, targetIndices } from "./cards";
+import { admitsFallback, fallbackModels } from "./fallback";
 import { GATE_THRESHOLD, gateModel, suggestProbability } from "./gate";
 import { summarizeError } from "./errors";
 import { buildContext, parseSuggestion, PROMPT_VERSION, SYSTEM_PROMPT, type Suggestion } from "./suggestion";
@@ -236,28 +238,52 @@ export default function nextStep(pi: ExtensionAPI, timing = {
     }
     let stage: "provider" | "parse" = "provider";
     let stopReason: string | undefined;
+    let served = model;
+    const fallbackFrom: FallbackAttempt[] = [];
     try {
-      const response = await completeSimple(model, {
-        systemPrompt: [SYSTEM_PROMPT],
-        messages: [{ role: "user", content: JSON.stringify(snapshot), timestamp: Date.now() }],
-      }, {
-        apiKey: ctx.modelRegistry.resolver(model, session), reasoning: model.reasoning ? effort : undefined,
-        maxTokens: 2048, signal, statefulResponses: false, storeResponses: false,
-        onPayload: payload => {
-          // Hosts can apply their normal provider routing to this independent request.
-          const request = { payload, model };
-          pi.events.emit("omp:before-auxiliary-provider-request", request);
-          return request.payload;
-        },
-      });
+      const targets = [model, ...fallbackModels(ctx, model, modelSpec.startsWith("@") ? modelSpec.slice(1) : undefined)];
+      let response: AssistantMessage | undefined;
+      // One shared deadline: each failed provider attempt hands the remaining time to the next chain entry.
+      for (const [index, target] of targets.entries()) {
+        served = target;
+        stopReason = undefined;
+        const attemptStarted = timing.now();
+        let failure: unknown;
+        let id: number;
+        try {
+          response = await completeSimple(target, {
+            systemPrompt: [SYSTEM_PROMPT],
+            messages: [{ role: "user", content: JSON.stringify(snapshot), timestamp: Date.now() }],
+          }, {
+            apiKey: ctx.modelRegistry.resolver(target, session), reasoning: target.reasoning ? effort : undefined,
+            maxTokens: 2048, signal, statefulResponses: false, storeResponses: false,
+            onPayload: payload => {
+              // Hosts can apply their normal provider routing to this independent request.
+              const request = { payload, model: target };
+              pi.events.emit("omp:before-auxiliary-provider-request", request);
+              return request.payload;
+            },
+          });
+          stopReason = response.stopReason;
+          if (response.stopReason !== "error") break;
+          failure = new Error(response.errorMessage || "Provider stopped with error");
+          id = AIError.classifyMessage(response);
+        } catch (error) {
+          failure = error;
+          id = AIError.classify(error, target.api);
+        }
+        if (sample.controller.signal.aborted || current !== sample || captured !== revision || sample.session !== ctx.sessionManager.getSessionId()) return;
+        if (signal.aborted || index === targets.length - 1 || !admitsFallback(id)) throw failure;
+        fallbackFrom.push({ model: `${target.provider}/${target.id}`, stopReason, error: summarizeError(failure, "provider"), latencyMs: Math.round(timing.now() - attemptStarted) });
+      }
       if (sample.controller.signal.aborted || current !== sample || captured !== revision || sample.session !== ctx.sessionManager.getSessionId()) return;
       sample.pending = false;
-      stopReason = response.stopReason;
-      if (response.stopReason !== "stop") throw new Error(response.errorMessage || `Provider stopped with ${response.stopReason}`);
+      if (response!.stopReason !== "stop") throw new Error(response!.errorMessage || `Provider stopped with ${response!.stopReason}`);
       stage = "parse";
-      const result = parseSuggestion(response.content.filter(block => block.type === "text").map(block => block.text).join(""));
+      const result = parseSuggestion(response!.content.filter(block => block.type === "text").map(block => block.text).join(""));
       sample.result = result;
-      record(sample, { type: "generated", ...requested, result, latencyMs: Math.round(timing.now() - started) });
+      record(sample, { type: "generated", ...requested, model: `${served.provider}/${served.id}`, ...(fallbackFrom.length ? { fallbackFrom } : {}),
+        result, latencyMs: Math.round(timing.now() - started) });
       if (!available(ctx)) { record(sample, { type: "skipped", reason: "input or UI became busy" }); outcome = "not displayed"; return; }
       if (result.kind === "none") { outcome = "none"; return; }
       try { render(ctx, sample); } catch { fail(ctx); }
@@ -266,9 +292,9 @@ export default function nextStep(pi: ExtensionAPI, timing = {
       sample.pending = false;
       outcome = signal.aborted ? "generation timeout" : "generation failed";
       lastFailure = {
-        type: "failed", at: new Date().toISOString(), session, reason: outcome, model: modelName, effort,
+        type: "failed", at: new Date().toISOString(), session, reason: outcome, model: `${served.provider}/${served.id}`, effort,
         stage, stopReason, error: signal.aborted ? "Generation exceeded the 60-second deadline" : summarizeError(error, stage),
-        latencyMs: Math.round(timing.now() - started),
+        latencyMs: Math.round(timing.now() - started), ...(fallbackFrom.length ? { fallbackFrom } : {}),
       };
       const { session: _session, ...failure } = lastFailure;
       record(sample, failure);
@@ -428,7 +454,8 @@ export default function nextStep(pi: ExtensionAPI, timing = {
       const sessionFile = ctx.sessionManager.getSessionFile();
       const location = dataDirectory ? resolve(ctx.cwd, dataDirectory) : sessionFile ? join(dirname(sessionFile), "next-step") : "unavailable in ephemeral session";
       const failure = lastFailure?.session === ctx.sessionManager.getSessionId() ? lastFailure : undefined;
-      const detail = failure ? `\n最近失败：${failure.at} · ${failure.model} / ${failure.effort} · ${failure.stage}${failure.stopReason ? ` / ${failure.stopReason}` : ""}\n${failure.error}` : "";
+      const tried = failure?.fallbackFrom?.map(attempt => `\n先前出口：${attempt.model} · ${attempt.error}`).join("") ?? "";
+      const detail = failure ? `\n最近失败：${failure.at} · ${failure.model} / ${failure.effort} · ${failure.stage}${failure.stopReason ? ` / ${failure.stopReason}` : ""}\n${failure.error}${tried}` : "";
       ctx.ui.notify(`下一步建议：${enabled ? "开启" : "关闭"} · ${modelSpec} / ${effort} · ${outcome}${detail}\n本地采集：${dataEnabled && !dataFailed ? location : "关闭"}（含对话摘录、候选和下一条发送内容，仅存本机）`, "info");
     },
   });
